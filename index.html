@@ -8,59 +8,38 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700;800&display=swap" rel="stylesheet">
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #000; overflow: hidden; color: white; font-family: 'Montserrat', sans-serif; }
-        
-        /* Background Dinâmico */
         .bg-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; overflow: hidden; }
         .bg-image { position: absolute; top: -10%; left: -10%; width: 120%; height: 120%; background-size: cover; background-position: center; transition: background-image 1.2s ease-in-out; filter: blur(40px) brightness(0.3); animation: backgroundMove 60s infinite alternate; }
         @keyframes backgroundMove { 0% { transform: scale(1); } 100% { transform: scale(1.15); } }
         .glass-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.3); z-index: 2; }
-
         .container { position: relative; display: flex; flex-direction: column; height: 100vh; padding: 40px; justify-content: space-between; z-index: 3; box-sizing: border-box; max-width: 850px; margin: 0 auto; }
-
-        /* Top Bar: Status e Ouvintes */
-        .status-header { text-align: center; width: 100%; }
-        .from-spotify { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; color: #1DB954; letter-spacing: 5px; margin-bottom: 5px; }
-        
+        .from-spotify { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; color: #1DB954; letter-spacing: 5px; margin-bottom: 5px; text-align: center; }
         .top-right-bar { position: absolute; top: 40px; right: 40px; z-index: 5; }
         .listeners-pile { display: flex; flex-direction: row-reverse; }
         .user-container { display: flex; flex-direction: column; align-items: center; margin-left: -15px; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         .listener-avatar { width: 48px; height: 48px; border-radius: 50%; background-size: cover; border: 3px solid #000; background-position: center; box-shadow: -5px 0 15px rgba(0,0,0,0.6); }
         .user-name-tag { font-size: 0.55rem; font-weight: 800; margin-top: 6px; text-transform: uppercase; background: rgba(0,0,0,0.7); padding: 3px 8px; border-radius: 5px; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-        /* Capa Circular */
         .art-section { flex-grow: 1; display: flex; align-items: center; justify-content: center; padding: 20px 0; }
         .circle-art { width: 300px; height: 300px; border-radius: 50%; background-size: cover; background-position: center; box-shadow: 0 30px 100px rgba(0,0,0,0.9); border: 2px solid rgba(255,255,255,0.1); animation: spin 40s linear infinite; animation-play-state: paused; transition: background-image 0.8s; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-
-        /* Player Hidden do YouTube (Double Buffering) */
         .yt-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-
-        /* Controles e Letras */
         .controls-section { width: 100%; margin-bottom: 50px; }
         .song-title { font-size: 2.2rem; font-weight: 800; margin: 0; letter-spacing: -1.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .artist { font-size: 1.2rem; color: rgba(255, 255, 255, 0.5); margin-top: 5px; font-weight: 400; }
-        
         .lyrics-row { display: flex; align-items: center; min-height: 60px; margin: 20px 0; }
         #current-lyric-line { font-size: 1.4rem; font-weight: 700; color: #fff; line-height: 1.4; transition: opacity 0.3s; text-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-
         .bar-bg { width: 100%; height: 5px; background: rgba(255,255,255,0.1); border-radius: 10px; cursor: pointer; position: relative; }
         .bar-fill { width: 0%; height: 100%; background: #fff; border-radius: 10px; transition: width 0.3s linear; }
         .time-info { display: flex; justify-content: space-between; font-size: 0.85rem; color: rgba(255, 255, 255, 0.4); margin-top: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
-        
         .btns { display: flex; justify-content: space-between; align-items: center; margin-top: 25px; padding: 0 10px; }
         .btns button { font-size: 1.6rem; opacity: 0.7; transition: 0.3s; color: white; background: none; border: none; cursor: pointer; }
         .btns button:hover { opacity: 1; transform: scale(1.15); }
         .play { font-size: 4.5rem !important; opacity: 1 !important; color: #fff !important; }
-        
-        /* Volume Popover Lateral */
         .volume-popover { position: absolute; bottom: 40px; right: 110px; width: 160px; height: 50px; background: rgba(255,255,255,0.12); backdrop-filter: blur(25px); border-radius: 30px; display: none; align-items: center; justify-content: center; z-index: 20; padding: 0 20px; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 10px 30px rgba(0,0,0,0.4); }
         .volume-popover input { width: 100%; cursor: pointer; accent-color: #1DB954; height: 4px; }
-
         .footer-tools { position: absolute; bottom: 40px; left: 0; width: 100%; padding: 0 40px; display: flex; justify-content: space-between; box-sizing: border-box; z-index: 10; }
         .tool-btn { width: 50px; height: 50px; border-radius: 50%; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 1.2rem; cursor: pointer; transition: 0.3s; }
         .tool-btn:hover { background: #1DB954; color: #000; border-color: #1DB954; }
-        
-        /* Modal Configuração */
         .modal-config { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.92); z-index: 100; display: none; align-items: center; justify-content: center; backdrop-filter: blur(25px); }
         .modal-box { background: #121212; padding: 40px; border-radius: 30px; width: 320px; text-align: center; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 25px 60px rgba(0,0,0,0.8); }
         .modal-box input { width: 100%; background: #222; border: 1px solid #333; padding: 15px; border-radius: 12px; color: #fff; margin-bottom: 20px; box-sizing: border-box; font-family: Montserrat; font-size: 1rem; }
@@ -93,7 +72,7 @@
     <div class="volume-popover" id="volumePop"><input type="range" min="0" max="100" value="70" id="volRange"></div>
 
     <div class="container">
-        <div class="header-info"><p class="from-spotify" id="status-msg">Sincronizando...</p></div>
+        <div class="header-info"><p class="from-spotify" id="status-msg">JAM SYNC ATIVA</p></div>
         <div class="top-right-bar"><div class="listeners-pile" id="pile"></div></div>
         
         <div class="art-section"><div class="circle-art" id="mainArt"></div></div>
@@ -103,16 +82,13 @@
                 <p class="song-title" id="trackTitle">Aguardando Host...</p>
                 <p class="artist" id="trackArtist">Inicie uma música no Spotify</p>
             </div>
-            
             <div class="lyrics-row"><p id="current-lyric-line"></p></div>
-            
             <div class="bar-bg"><div class="bar-fill" id="progress"></div></div>
             <div class="time-info"><span id="currTime">0:00</span><span id="totalTime">0:00</span></div>
-            
             <div class="btns">
                 <button onclick="sendCommand('shuffle')"><i class="fas fa-random"></i></button>
                 <button onclick="sendCommand('prev')"><i class="fas fa-step-backward"></i></button>
-                <button class="play" id="playIcon" onclick="sendCommand('playpause')"><i class="fas fa-play-circle"></i></button>
+                <button class="play" id="playIcon" onclick="handlePlayPause()"><i class="fas fa-play-circle"></i></button>
                 <button onclick="sendCommand('next')"><i class="fas fa-step-forward"></i></button>
                 <button onclick="sendCommand('repeat')"><i class="fas fa-redo"></i></button>
             </div>
@@ -126,11 +102,14 @@
 
     <script src="https://www.youtube.com/iframe_api"></script>
     <script>
+        // CONFIGURAÇÃO DO NGROK: Se estiver usando o ngrok, coloque a URL dele aqui.
+        // Se estiver rodando local, deixe vazio ou use "http://localhost:8000"
+        const API_BASE = ""; 
+
         let p1, p2, activePlayer, lastVid = "", lastTrackId = "", firstSync = true;
-        let volTimer;
+        let volTimer, isLocalPaused = false;
         let currentLyrics = [];
 
-        // 1 & 2. Double Buffering Initialization
         function onYouTubeIframeAPIReady() {
             p1 = new YT.Player('player1', { height: '1', width: '1', playerVars: {'controls': 0, 'disablekb': 1}, 
                 events: { 'onReady': () => { if(p2) initApp(); } } });
@@ -147,14 +126,13 @@
             });
         }
 
-        // --- MOTOR DE LETRAS LRCLIB ---
         async function fetchLyrics(track, artist, duration) {
             try {
                 const url = `https://lrclib.net/api/get?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(track)}&duration=${Math.round(duration)}`;
                 const res = await fetch(url);
                 const data = await res.json();
                 if (data && data.syncedLyrics) parseLyrics(data.syncedLyrics);
-                else currentLyrics = [{ time: 0, text: "Letra Instrumental" }];
+                else currentLyrics = [{ time: 0, text: "Instrumental" }];
             } catch (e) { currentLyrics = []; }
         }
 
@@ -170,9 +148,20 @@
             document.getElementById('current-lyric-line').innerText = line.text;
         }
 
-        // --- SINCRONIZAÇÃO E COMANDOS ---
         async function sendCommand(cmd) {
-            try { await fetch('/command', { method: 'POST', body: JSON.stringify({cmd: cmd}) }); } catch(e){}
+            try { 
+                await fetch(`${API_BASE}/command`, { 
+                    method: 'POST', 
+                    headers: {'ngrok-skip-browser-warning': 'true', 'Content-Type': 'application/json'},
+                    body: JSON.stringify({cmd: cmd}) 
+                }); 
+            } catch(e){}
+        }
+
+        function handlePlayPause() {
+            isLocalPaused = !isLocalPaused;
+            if(isLocalPaused && activePlayer) activePlayer.pauseVideo();
+            sendCommand('playpause');
         }
 
         async function syncComServidor() {
@@ -181,21 +170,20 @@
                 foto: firstSync ? localStorage.getItem('jam_pic') : "" 
             };
             try {
-                const res = await fetch('/status', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                const res = await fetch(`${API_BASE}/status`, {
+                    method: 'POST', 
+                    headers: {'ngrok-skip-browser-warning': 'true', 'Content-Type': 'application/json'},
                     body: JSON.stringify(payload)
                 });
                 const d = await res.json();
                 firstSync = false;
 
-                // Troca de música? Busca letra nova.
                 const trackId = d.track_name + d.artist_name;
                 if (trackId !== lastTrackId && d.track_name) {
                     lastTrackId = trackId;
                     fetchLyrics(d.track_name, d.artist_name, d.duration);
                 }
 
-                // Update UI
                 document.getElementById('trackTitle').innerText = d.track_name || "Pausado";
                 document.getElementById('trackArtist').innerText = d.artist_name || "";
                 document.getElementById('progress').style.width = ((d.progress / d.duration) * 100) + "%";
@@ -209,7 +197,6 @@
                     document.getElementById('bgImg').style.backgroundImage = `url(${d.capa})`;
                 }
 
-                // 2. Double Buffering Logic
                 if (d.video_id && d.video_id !== lastVid) {
                     let next = (activePlayer === p1) ? p2 : p1;
                     next.loadVideoById(d.video_id, d.progress);
@@ -219,8 +206,7 @@
                     activePlayer.setVolume(document.getElementById('volRange').value);
                 }
 
-                // 4. Fine Sync (Speed Adjustment)
-                if (activePlayer && activePlayer.getCurrentTime) {
+                if (activePlayer && activePlayer.getCurrentTime && !isLocalPaused) {
                     const pTime = activePlayer.getCurrentTime();
                     updateLyrics(pTime);
                     let diff = pTime - d.progress;
@@ -235,7 +221,6 @@
             } catch(e) {}
         }
 
-        // --- UTILITÁRIOS ---
         function formatTime(s) {
             let m = Math.floor(s/60); let sec = Math.floor(s%60);
             return `${m}:${sec.toString().padStart(2,'0')}`;
