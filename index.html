@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jam Sync Player</title>
+    <title>Jam Sync Player | Ultra Sync</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700;800&display=swap" rel="stylesheet">
     <style>
@@ -13,7 +13,7 @@
             position: absolute; top: -10%; left: -10%; width: 120%; height: 120%; 
             background-size: cover; background-position: center; 
             transition: background-image 1.2s ease-in-out; 
-            filter: blur(3px) brightness(0.3); 
+            filter: blur(8px) brightness(0.3); 
             animation: backgroundMove 60s infinite alternate; 
         }
         @keyframes backgroundMove { 0% { transform: scale(1); } 100% { transform: scale(1.15); } }
@@ -22,7 +22,7 @@
         /* Layout Principal */
         .container { position: relative; display: flex; flex-direction: column; height: 100vh; padding: 40px; justify-content: space-between; z-index: 3; box-sizing: border-box; max-width: 1200px; margin: 0 auto; }
         
-        /* Barra de Fila Lateral (AGORA NA ESQUERDA) */
+        /* Fila Lateral */
         .queue-sidebar { position: fixed; left: 40px; top: 50%; transform: translateY(-50%); width: 220px; background: rgba(255,255,255,0.05); backdrop-filter: blur(15px); border-radius: 25px; padding: 20px; border: 1px solid rgba(255,255,255,0.1); z-index: 10; }
         .queue-title { font-size: 0.65rem; font-weight: 800; color: #1DB954; letter-spacing: 3px; margin-bottom: 20px; text-align: center; }
         .queue-item { display: flex; align-items: center; margin-bottom: 15px; gap: 12px; transition: 0.3s; }
@@ -33,18 +33,22 @@
 
         .from-spotify { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; color: #1DB954; letter-spacing: 5px; margin-bottom: 5px; text-align: center; }
         
-        /* OUVINTES (AGORA NA DIREITA) */
+        /* Ouvintes */
         .top-right-bar { position: absolute; top: 40px; right: 40px; z-index: 5; } 
-        .listeners-pile { display: flex; flex-direction: row-reverse; } /* Invertido para empilhar bonito na direita */
+        .listeners-pile { display: flex; flex-direction: row-reverse; }
         .user-container { display: flex; flex-direction: column; align-items: center; margin-left: -15px; transition: 0.4s; }
         .listener-avatar { width: 48px; height: 48px; border-radius: 50%; background-size: cover; border: 3px solid #000; background-position: center; box-shadow: -5px 0 15px rgba(0,0,0,0.6); }
         .user-name-tag { font-size: 0.55rem; font-weight: 800; margin-top: 6px; text-transform: uppercase; background: rgba(0,0,0,0.7); padding: 3px 8px; border-radius: 5px; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         
+        /* Player Visual */
         .art-section { flex-grow: 1; display: flex; align-items: center; justify-content: center; padding: 20px 0; }
         .circle-art { width: 320px; height: 320px; border-radius: 50%; background-size: cover; background-position: center; box-shadow: 0 30px 100px rgba(0,0,0,0.9); border: 2px solid rgba(255,255,255,0.1); animation: spin 40s linear infinite; animation-play-state: paused; transition: background-image 0.8s; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         
+        /* YouTube Oculto */
         .yt-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+        
+        /* Controles */
         .controls-section { width: 100%; max-width: 700px; margin: 0 auto 50px auto; }
         .song-title { font-size: 2.2rem; font-weight: 800; margin: 0; letter-spacing: -1.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
         .artist { font-size: 1.2rem; color: rgba(255, 255, 255, 0.5); margin-top: 5px; font-weight: 400; text-align: center; }
@@ -75,6 +79,7 @@
 <body>
     <div id="player1" class="yt-hidden"></div>
     <div id="player2" class="yt-hidden"></div>
+
     <div class="bg-container"><div class="bg-image" id="bgImg"></div></div>
     <div class="glass-overlay"></div>
     
@@ -133,15 +138,19 @@
     <script>
         const API_BASE = "https://jagger-preelectric-densely.ngrok-free.dev"; 
 
+        // PILAR 1: REGISTRO DO SERVICE WORKER
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').catch(err => console.log("SW Fail:", err));
+        }
+
         let p1, p2, activePlayer, lastVid = "", lastTrackId = "", firstSync = true;
         let volTimer;
         let currentLyrics = [];
 
         function onYouTubeIframeAPIReady() {
-            p1 = new YT.Player('player1', { height: '1', width: '1', playerVars: {'controls': 0, 'disablekb': 1, 'origin': window.location.origin}, 
-                events: { 'onReady': () => { if(p2) initApp(); } } });
-            p2 = new YT.Player('player2', { height: '1', width: '1', playerVars: {'controls': 0, 'disablekb': 1, 'origin': window.location.origin}, 
-                events: { 'onReady': () => { if(p1) initApp(); } } });
+            const playerConfig = { height: '1', width: '1', playerVars: {'controls': 0, 'disablekb': 1, 'origin': window.location.origin} };
+            p1 = new YT.Player('player1', { ...playerConfig, events: { 'onReady': () => { if(p2) initApp(); } } });
+            p2 = new YT.Player('player2', { ...playerConfig, events: { 'onReady': () => { if(p1) initApp(); } } });
         }
 
         function initApp() {
@@ -153,6 +162,7 @@
             });
         }
 
+        // --- LÓGICA DE LETRAS ---
         async function fetchLyrics(track, artist, duration) {
             try {
                 const url = `https://lrclib.net/api/get?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(track)}&duration=${Math.round(duration)}`;
@@ -175,6 +185,7 @@
             document.getElementById('current-lyric-line').innerText = line.text;
         }
 
+        // --- COMANDOS ---
         async function sendCommand(cmd) {
             try { 
                 await fetch(`${API_BASE}/command`, { 
@@ -185,10 +196,9 @@
             } catch(e){}
         }
 
-        function handlePlayPause() {
-            sendCommand('playpause');
-        }
+        function handlePlayPause() { sendCommand('playpause'); }
 
+        // --- SINCRONIZAÇÃO MESTRA ---
         async function syncComServidor() {
             const payload = { 
                 nome: localStorage.getItem('jam_name') || "Ouvinte", 
@@ -203,12 +213,14 @@
                 const d = await res.json();
                 firstSync = false;
 
+                // Troca de Letras
                 const trackId = d.track_name + d.artist_name;
                 if (trackId !== lastTrackId && d.track_name) {
                     lastTrackId = trackId;
                     fetchLyrics(d.track_name, d.artist_name, d.duration);
                 }
 
+                // UI Updates
                 document.getElementById('trackTitle').innerText = d.track_name || "Pausado";
                 document.getElementById('trackArtist').innerText = d.artist_name || "";
                 document.getElementById('progress').style.width = ((d.progress / d.duration) * 100) + "%";
@@ -222,20 +234,16 @@
                     document.getElementById('bgImg').style.backgroundImage = `url(${d.capa})`;
                 }
 
-                // Renderizar Fila (Queue)
+                // Render Queue
                 if (d.fila) {
-                    const qContainer = document.getElementById('queueItems');
-                    qContainer.innerHTML = d.fila.map(m => `
+                    document.getElementById('queueItems').innerHTML = d.fila.map(m => `
                         <div class="queue-item">
                             <img src="${m.capa}">
-                            <div class="queue-info">
-                                <p><b>${m.name}</b></p>
-                                <p class="q-artist">${m.artist}</p>
-                            </div>
-                        </div>
-                    `).join('');
+                            <div class="queue-info"><p><b>${m.name}</b></p><p class="q-artist">${m.artist}</p></div>
+                        </div>`).join('');
                 }
 
+                // PILAR 2: LÓGICA DE DOUBLE BUFFERING
                 if (d.video_id && d.video_id !== lastVid) {
                     let next = (activePlayer === p1) ? p2 : p1;
                     next.loadVideoById(d.video_id, d.progress);
@@ -245,25 +253,26 @@
                     activePlayer.setVolume(document.getElementById('volRange').value);
                 }
 
-                // Sincronização Estável (ANTI-PULO)
+                // PILAR 3: SINCRONIZAÇÃO DINÂMICA (ANTI-ENGASGO)
                 if (activePlayer && activePlayer.getPlayerState) {
                     const ytState = activePlayer.getPlayerState();
                     if (d.is_playing) {
                         if (ytState !== 1 && ytState !== 3) activePlayer.playVideo();
                         const pTime = activePlayer.getCurrentTime();
                         updateLyrics(pTime);
+                        
                         let diff = pTime - d.progress;
                         
-                        // Margem maior para evitar o pula-pula
+                        // Se o erro for muito grande (mais de 3s), dá o salto
                         if (Math.abs(diff) > 3.0) {
                             activePlayer.seekTo(d.progress, true);
-                        } else if (diff > 0.8) {
-                            activePlayer.setPlaybackRate(0.95);
-                        } else if (diff < -0.8) {
-                            activePlayer.setPlaybackRate(1.05);
-                        } else {
                             activePlayer.setPlaybackRate(1);
-                        }
+                        } 
+                        // Ajuste fino: Se atrasar ou adiantar um pouco, muda a velocidade
+                        else if (diff > 0.6) activePlayer.setPlaybackRate(0.95); // Adiantado -> Desacelera
+                        else if (diff < -0.6) activePlayer.setPlaybackRate(1.05); // Atrasado -> Acelera
+                        else activePlayer.setPlaybackRate(1); // Perfeito -> Normal
+                        
                     } else {
                         if (ytState === 1) activePlayer.pauseVideo();
                     }
@@ -273,6 +282,7 @@
             } catch(e) { console.error("Erro Sync:", e); }
         }
 
+        // --- UTILITÁRIOS ---
         function formatTime(s) {
             let m = Math.floor(s/60); let sec = Math.floor(s%60);
             return `${m}:${sec.toString().padStart(2,'0')}`;
