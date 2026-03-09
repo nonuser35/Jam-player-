@@ -88,7 +88,7 @@
             <div class="btns">
                 <button onclick="sendCommand('shuffle')"><i class="fas fa-random"></i></button>
                 <button onclick="sendCommand('prev')"><i class="fas fa-step-backward"></i></button>
-                <button class="play" id="playIcon" onclick="handlePlayPause()"><i class="fas fa-play-circle"></i></button>
+                <button class="play" id="playIcon" onclick="handlePlayPause()"><i class="fas fa-pause-circle"></i></button>
                 <button onclick="sendCommand('next')"><i class="fas fa-step-forward"></i></button>
                 <button onclick="sendCommand('repeat')"><i class="fas fa-redo"></i></button>
             </div>
@@ -102,8 +102,6 @@
 
     <script src="https://www.youtube.com/iframe_api"></script>
     <script>
-        // CONFIGURAÇÃO DO NGROK: Se estiver usando o ngrok, coloque a URL dele aqui.
-        // Se estiver rodando local, deixe vazio ou use "http://localhost:8000"
         const API_BASE = "https://jagger-preelectric-densely.ngrok-free.dev"; 
 
         let p1, p2, activePlayer, lastVid = "", lastTrackId = "", firstSync = true;
@@ -178,12 +176,14 @@
                 const d = await res.json();
                 firstSync = false;
 
+                // Troca de Música
                 const trackId = d.track_name + d.artist_name;
                 if (trackId !== lastTrackId && d.track_name) {
                     lastTrackId = trackId;
                     fetchLyrics(d.track_name, d.artist_name, d.duration);
                 }
 
+                // UI
                 document.getElementById('trackTitle').innerText = d.track_name || "Pausado";
                 document.getElementById('trackArtist').innerText = d.artist_name || "";
                 document.getElementById('progress').style.width = ((d.progress / d.duration) * 100) + "%";
@@ -197,6 +197,7 @@
                     document.getElementById('bgImg').style.backgroundImage = `url(${d.capa})`;
                 }
 
+                // Troca de Player (Video)
                 if (d.video_id && d.video_id !== lastVid) {
                     let next = (activePlayer === p1) ? p2 : p1;
                     next.loadVideoById(d.video_id, d.progress);
@@ -206,39 +207,32 @@
                     activePlayer.setVolume(document.getElementById('volRange').value);
                 }
 
+                // Sincronização Suave
                 if (activePlayer && activePlayer.getCurrentTime && !isLocalPaused) {
-    const pTime = activePlayer.getCurrentTime();
-    updateLyrics(pTime);
-    
-    let diff = pTime - d.progress;
+                    const pTime = activePlayer.getCurrentTime();
+                    updateLyrics(pTime);
+                    let diff = pTime - d.progress;
 
-    // 1. Se a diferença for gigante (mais de 3s), dá um pulo direto (Seek)
-    if (Math.abs(diff) > 3) {
-        activePlayer.seekTo(d.progress, true);
-        activePlayer.setPlaybackRate(1); 
-    } 
-    // 2. Se a diferença for entre 0.5s e 3s, acelera/desacelera de leve
-    else if (diff > 0.5) {
-        activePlayer.setPlaybackRate(0.98); // Atrasa um pouquinho
-    } 
-    else if (diff < -0.5) {
-        activePlayer.setPlaybackRate(1.02); // Corre um pouquinho
-    } 
-    // 3. Se estiver "perto o suficiente", mantém velocidade normal
-    else {
-        activePlayer.setPlaybackRate(1);
-    }
+                    if (Math.abs(diff) > 3) {
+                        activePlayer.seekTo(d.progress, true);
+                        activePlayer.setPlaybackRate(1); 
+                    } else if (diff > 0.5) {
+                        activePlayer.setPlaybackRate(0.98);
+                    } else if (diff < -0.5) {
+                        activePlayer.setPlaybackRate(1.02);
+                    } else {
+                        activePlayer.setPlaybackRate(1);
+                    }
 
-    // Garante que o estado de Play/Pause do Host seja respeitado
-    if (d.is_playing && activePlayer.getPlayerState() !== 1) {
-        activePlayer.playVideo();
-    } else if (!d.is_playing && activePlayer.getPlayerState() === 1) {
-        activePlayer.pauseVideo();
-    }
-}
+                    if (d.is_playing && activePlayer.getPlayerState() !== 1) {
+                        activePlayer.playVideo();
+                    } else if (!d.is_playing && activePlayer.getPlayerState() === 1) {
+                        activePlayer.pauseVideo();
+                    }
                 }
+                
                 renderizarOuvintes(d.usuarios);
-            } catch(e) {}
+            } catch(e) { console.error("Erro Sync:", e); }
         }
 
         function formatTime(s) {
@@ -276,6 +270,7 @@
 
         function renderizarOuvintes(usuarios) {
             const pile = document.getElementById('pile'); pile.innerHTML = '';
+            if(!usuarios) return;
             usuarios.forEach(u => {
                 const div = document.createElement('div'); div.className = 'user-container';
                 div.innerHTML = `<div class="listener-avatar" style="background-image:url(${u.foto || 'https://www.gravatar.com/avatar/?d=mp'}); ${u.is_host ? 'border-color:#1DB954;' : ''}"></div>
