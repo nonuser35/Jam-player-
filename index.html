@@ -105,18 +105,18 @@
         const API_BASE = "https://jagger-preelectric-densely.ngrok-free.dev"; 
 
         let p1, p2, activePlayer, lastVid = "", lastTrackId = "", firstSync = true;
-        let volTimer, isLocalPaused = false;
+        let volTimer;
         let currentLyrics = [];
 
         function onYouTubeIframeAPIReady() {
-            p1 = new YT.Player('player1', { height: '1', width: '1', playerVars: {'controls': 0, 'disablekb': 1}, 
+            p1 = new YT.Player('player1', { height: '1', width: '1', playerVars: {'controls': 0, 'disablekb': 1, 'origin': window.location.origin}, 
                 events: { 'onReady': () => { if(p2) initApp(); } } });
-            p2 = new YT.Player('player2', { height: '1', width: '1', playerVars: {'controls': 0, 'disablekb': 1}, 
+            p2 = new YT.Player('player2', { height: '1', width: '1', playerVars: {'controls': 0, 'disablekb': 1, 'origin': window.location.origin}, 
                 events: { 'onReady': () => { if(p1) initApp(); } } });
         }
 
         function initApp() {
-            setInterval(syncComServidor, 1000);
+            setInterval(syncComServidor, 500); // Sincroniza mais rápido para bater com os 0.7s do Python
             checkSavedProfile();
             document.getElementById('volRange').addEventListener('input', (e) => {
                 if(activePlayer) activePlayer.setVolume(e.target.value);
@@ -157,8 +157,7 @@
         }
 
         function handlePlayPause() {
-            isLocalPaused = !isLocalPaused;
-            if(isLocalPaused && activePlayer) activePlayer.pauseVideo();
+            // Apenas envia o comando. O syncComServidor vai cuidar de parar o vídeo.
             sendCommand('playpause');
         }
 
@@ -183,7 +182,7 @@
                     fetchLyrics(d.track_name, d.artist_name, d.duration);
                 }
 
-                // UI
+                // UI Básica
                 document.getElementById('trackTitle').innerText = d.track_name || "Pausado";
                 document.getElementById('trackArtist').innerText = d.artist_name || "";
                 document.getElementById('progress').style.width = ((d.progress / d.duration) * 100) + "%";
@@ -197,7 +196,7 @@
                     document.getElementById('bgImg').style.backgroundImage = `url(${d.capa})`;
                 }
 
-                // Troca de Player (Video)
+                // Troca de Player (Double Buffering)
                 if (d.video_id && d.video_id !== lastVid) {
                     let next = (activePlayer === p1) ? p2 : p1;
                     next.loadVideoById(d.video_id, d.progress);
@@ -207,27 +206,32 @@
                     activePlayer.setVolume(document.getElementById('volRange').value);
                 }
 
-                // Sincronização Suave
-                if (activePlayer && activePlayer.getCurrentTime && !isLocalPaused) {
-                    const pTime = activePlayer.getCurrentTime();
-                    updateLyrics(pTime);
-                    let diff = pTime - d.progress;
-
-                    if (Math.abs(diff) > 3) {
-                        activePlayer.seekTo(d.progress, true);
-                        activePlayer.setPlaybackRate(1); 
-                    } else if (diff > 0.5) {
-                        activePlayer.setPlaybackRate(0.98);
-                    } else if (diff < -0.5) {
-                        activePlayer.setPlaybackRate(1.02);
+                // SINCRONIZAÇÃO DE PLAY/PAUSE E TEMPO
+                if (activePlayer && activePlayer.getPlayerState) {
+                    const ytState = activePlayer.getPlayerState();
+                    
+                    // 1. Sincroniza o Estado de Reprodução (O SITE OBEDECE O PYTHON)
+                    if (d.is_playing) {
+                        if (ytState !== 1 && ytState !== 3) activePlayer.playVideo();
                     } else {
-                        activePlayer.setPlaybackRate(1);
+                        if (ytState === 1) activePlayer.pauseVideo();
                     }
 
-                    if (d.is_playing && activePlayer.getPlayerState() !== 1) {
-                        activePlayer.playVideo();
-                    } else if (!d.is_playing && activePlayer.getPlayerState() === 1) {
-                        activePlayer.pauseVideo();
+                    // 2. Sincroniza o tempo apenas se estiver tocando
+                    if (d.is_playing) {
+                        const pTime = activePlayer.getCurrentTime();
+                        updateLyrics(pTime);
+                        let diff = pTime - d.progress;
+
+                        if (Math.abs(diff) > 2.5) {
+                            activePlayer.seekTo(d.progress, true);
+                        } else if (diff > 0.5) {
+                            activePlayer.setPlaybackRate(0.95);
+                        } else if (diff < -0.5) {
+                            activePlayer.setPlaybackRate(1.05);
+                        } else {
+                            activePlayer.setPlaybackRate(1);
+                        }
                     }
                 }
                 
