@@ -3,133 +3,158 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mirror Player Pro</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <title id="page-title">Jam Player</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700;800&display=swap" rel="stylesheet">
     <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #000; overflow: hidden; color: white; font-family: 'Montserrat', sans-serif; }
-        .bg-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; overflow: hidden; }
-        .bg-image { position: absolute; top: -5%; left: -5%; width: 110%; height: 110%; background-size: cover; background-position: center; transition: background-image 1s ease-in-out; filter: blur(15px) brightness(0.5); animation: backgroundMove 40s ease-in-out infinite alternate; }
-        @keyframes backgroundMove { 0% { transform: scale(1); } 100% { transform: scale(1.1); } }
-        .container { position: relative; display: flex; flex-direction: column; height: 100vh; padding: 30px 40px; justify-content: space-between; z-index: 3; box-sizing: border-box; max-width: 900px; margin: 0 auto; }
-        #status-msg { font-size: 0.9rem; font-weight: 700; cursor: pointer; opacity: 0.7; transition: 0.3s; }
-        #status-msg:hover { opacity: 1; color: #1DB954; }
-        .top-right-bar { position: absolute; top: 30px; right: 40px; z-index: 5; }
-        .listeners-pile { display: flex; flex-direction: row-reverse; }
-        .user-container { display: flex; flex-direction: column; align-items: center; margin-left: -15px; }
-        .listener-avatar { width: 45px; height: 45px; border-radius: 50%; background-size: cover; border: 2px solid #000; box-shadow: -5px 0 10px rgba(0,0,0,0.5); }
-        .user-name-tag { font-size: 0.5rem; font-weight: 800; margin-top: 4px; background: rgba(0,0,0,0.7); padding: 2px 5px; border-radius: 4px; }
-        .circle-art { width: 300px; height: 300px; border-radius: 50%; background-size: cover; margin: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.8); animation: spin 30s linear infinite; border: 2px solid rgba(255,255,255,0.1); }
+        :root { --spotify-green: #1DB954; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #050505; color: white; font-family: 'Montserrat', sans-serif; overflow: hidden; }
+        
+        /* Background Desfocado */
+        .bg-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        .bg-image { position: absolute; top: -10%; left: -10%; width: 120%; height: 120%; background-size: cover; background-position: center; filter: blur(50px) brightness(0.3); transition: background-image 1.2s ease-in-out; }
+
+        .content { position: relative; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; text-align: center; padding: 20px; box-sizing: border-box; }
+
+        /* Status do Host */
+        #status-msg { position: absolute; top: 20px; left: 20px; font-size: 10px; font-weight: 800; color: var(--spotify-green); text-transform: uppercase; cursor: pointer; background: rgba(0,0,0,0.5); padding: 8px 15px; border-radius: 20px; border: 1px solid rgba(29, 185, 84, 0.4); letter-spacing: 1px; }
+
+        /* Disco Giratório */
+        .art-container { margin-bottom: 25px; }
+        .circle-art { width: 280px; height: 280px; border-radius: 50%; background-size: cover; background-position: center; box-shadow: 0 20px 50px rgba(0,0,0,0.9); border: 3px solid rgba(255,255,255,0.1); animation: spin 20s linear infinite; animation-play-state: paused; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        /* Informações da Música */
+        .song-title { font-size: 1.8rem; font-weight: 800; margin: 0; text-shadow: 0 4px 15px rgba(0,0,0,0.6); max-width: 90vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .artist-name { font-size: 1rem; color: rgba(255,255,255,0.5); margin: 8px 0 15px 0; font-weight: 400; }
+
+        /* Letras Sincronizadas */
+        #lyric-container { height: 50px; font-size: 1.1rem; font-weight: 600; color: #fff; margin-bottom: 30px; display: flex; align-items: center; justify-content: center; max-width: 85%; line-height: 1.4; text-shadow: 0 2px 8px rgba(0,0,0,0.8); }
+
+        /* Controles e Progresso */
+        .player-controls { width: 100%; max-width: 450px; background: rgba(0,0,0,0.2); padding: 20px; border-radius: 20px; backdrop-filter: blur(10px); }
+        .progress-wrapper { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+        .time-label { font-size: 0.75rem; font-weight: 700; width: 40px; opacity: 0.6; font-variant-numeric: tabular-nums; }
+        .bar-bg { flex-grow: 1; height: 4px; background: rgba(255,255,255,0.1); border-radius: 4px; position: relative; }
+        .bar-fill { width: 0%; height: 100%; background: #fff; border-radius: 4px; transition: width 0.4s linear; box-shadow: 0 0 12px rgba(255,255,255,0.3); }
+
+        .buttons { display: flex; gap: 30px; justify-content: center; align-items: center; }
+        .btn { background: none; border: none; color: white; cursor: pointer; font-size: 1.2rem; opacity: 0.7; transition: 0.2s; }
+        .btn:hover { opacity: 1; transform: scale(1.15); }
+        .btn-play { background: white; color: black; width: 45px; height: 45px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem; padding-left: 3px; }
+
         .yt-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-        .song-title { font-size: 2rem; font-weight: 800; margin: 0; }
-        .artist { font-size: 1.1rem; color: rgba(255,255,255,0.6); }
-        .bar-bg { width: 100%; height: 6px; background: rgba(255,255,255,0.2); border-radius: 10px; margin-top: 20px; }
-        .bar-fill { width: 0%; height: 100%; background: #fff; border-radius: 10px; transition: width 0.5s linear; }
-        #current-lyric-line { min-height: 30px; margin: 15px 0; font-size: 1.2rem; font-weight: 700; }
-        .modal-config { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 100; display: none; align-items: center; justify-content: center; backdrop-filter: blur(10px); }
-        .modal-box { background: #111; padding: 30px; border-radius: 20px; text-align: center; width: 300px; border: 1px solid #333; }
-        input[type="text"] { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: none; background: #222; color: #fff; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; border-radius: 8px; border: none; background: #fff; font-weight: 800; cursor: pointer; }
     </style>
 </head>
 <body>
     <div id="player1" class="yt-hidden"></div>
     <div id="player2" class="yt-hidden"></div>
-    <div class="bg-container"><div class="bg-image" id="bgImg"></div></div>
     
-    <div class="modal-config" id="configModal">
-        <div class="modal-box">
-            <h3 id="modalTitle">PERFIL</h3>
-            <input type="text" id="inputName" placeholder="Seu apelido...">
-            <button onclick="saveProfile()">ENTRAR</button>
-        </div>
-    </div>
+    <div class="bg-container"><div class="bg-image" id="bgImg"></div></div>
 
-    <div class="container">
-        <div id="status-msg" onclick="atualizarLinkHost()">CONECTAR AO HOST</div>
-        <div class="top-right-bar"><div class="listeners-pile" id="pile"></div></div>
-        <div class="circle-art" id="mainArt"></div>
-        <div class="controls-section">
-            <p class="song-title" id="trackTitle">Aguardando...</p>
-            <p class="artist" id="trackArtist">...</p>
-            <p id="current-lyric-line">...</p>
-            <div class="bar-bg"><div class="bar-fill" id="progress"></div></div>
+    <div class="content">
+        <div id="status-msg" onclick="mudarHost()">● AGUARDANDO HOST</div>
+
+        <div class="art-container">
+            <div class="circle-art" id="mainArt"></div>
+        </div>
+
+        <div class="song-info">
+            <h1 class="song-title" id="trackTitle">Sincronizando...</h1>
+            <p class="artist-name" id="trackArtist">Inicie o Spotify no computador</p>
+        </div>
+
+        <div id="lyric-container"><span id="lyric-text"></span></div>
+
+        <div class="player-controls">
+            <div class="progress-wrapper">
+                <span class="time-label" id="current-time">0:00</span>
+                <div class="bar-bg"><div class="bar-fill" id="progress-bar"></div></div>
+                <span class="time-label" id="total-time">0:00</span>
+            </div>
+
+            <div class="buttons">
+                <button class="btn">⏮</button>
+                <button class="btn btn-play" id="play-btn">▶</button>
+                <button class="btn">⏭</button>
+            </div>
         </div>
     </div>
 
     <script src="https://www.youtube.com/iframe_api"></script>
     <script>
-        let p1, p2, activePlayer, lastVidId = "", currentLyrics = [];
-        // Substitua o que estiver lá por isto:
+        // LINK DO SEU NGROK CONFIGURADO ABAIXO
         let api_url = "https://jagger-preelectric-densely.ngrok-free.dev";
+        let lastVid = "", p1, p2, activePlayer;
 
         function onYouTubeIframeAPIReady() {
-            p1 = new YT.Player('player1', { height: '1', width: '1', events: { 'onReady': init } });
-            p2 = new YT.Player('player2', { height: '1', width: '1', events: { 'onReady': init } });
+            p1 = new YT.Player('player1', { height: '1', width: '1', events: { 'onReady': () => setInterval(sync, 1000) } });
+            p2 = new YT.Player('player2', { height: '1', width: '1' });
         }
 
-        function init() {
-            if (p1 && p2 && !activePlayer) {
-                activePlayer = p1;
-                setInterval(sync, 1000);
-                if(!localStorage.getItem('jam_name')) document.getElementById('configModal').style.display='flex';
-            }
+        function formatTime(s) {
+            if (!s) return "0:00";
+            let min = Math.floor(s / 60);
+            let sec = Math.floor(s % 60);
+            return `${min}:${sec < 10 ? '0' : ''}${sec}`;
         }
 
         async function sync() {
-            if(!api_url) return;
             try {
-                const res = await fetch(`${api_url}/status`, {
-                    method: 'POST',
-                    body: JSON.stringify({ nome: localStorage.getItem('jam_name'), foto: localStorage.getItem('jam_pic') || "" })
+                const r = await fetch(`${api_url}/status`, { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({nome:"Ouvinte"}) 
                 });
-                const d = await res.json();
-                
-                document.getElementById('trackTitle').innerText = d.track_name;
-                document.getElementById('trackArtist').innerText = d.artist_name;
-                document.getElementById('progress').style.width = (d.progress/d.duration*100) + "%";
-                document.getElementById('mainArt').style.backgroundImage = `url(${d.capa})`;
-                document.getElementById('bgImg').style.backgroundImage = `url(${d.capa})`;
+                const d = await r.json();
 
-                // 1. Double Buffering
-                if (d.video_id && d.video_id !== lastVidId) {
+                // Atualização de Textos e Letras
+                document.getElementById('trackTitle').innerText = d.track_name || "Sem música";
+                document.getElementById('trackArtist').innerText = d.artist_name || "Spotify Pausado";
+                document.getElementById('page-title').innerText = d.is_playing ? `▶ ${d.track_name}` : "Jam Player";
+                document.getElementById('lyric-text').innerText = d.current_lyric || "";
+
+                // Visual e Capa
+                if(d.capa) {
+                    document.getElementById('mainArt').style.backgroundImage = `url(${d.capa})`;
+                    document.getElementById('bgImg').style.backgroundImage = `url(${d.capa})`;
+                }
+                
+                // Animação do Disco
+                document.getElementById('mainArt').style.animationPlayState = d.is_playing ? 'running' : 'paused';
+
+                // Barra de Progresso e Tempos
+                let perc = (d.progress / d.duration) * 100;
+                document.getElementById('progress-bar').style.width = (perc || 0) + "%";
+                document.getElementById('current-time').innerText = formatTime(d.progress);
+                document.getElementById('total-time').innerText = formatTime(d.duration);
+                document.getElementById('play-btn').innerText = d.is_playing ? '⏸' : '▶';
+
+                // Sincronia de Vídeo/Áudio
+                if (d.video_id && d.video_id !== lastVid) {
                     let next = (activePlayer === p1) ? p2 : p1;
                     next.loadVideoById(d.video_id, d.progress);
-                    activePlayer.pauseVideo();
+                    if(activePlayer) activePlayer.pauseVideo();
                     activePlayer = next;
-                    lastVidId = d.video_id;
+                    lastVid = d.video_id;
                 }
 
-                // 2. Velocidade Dinâmica
-                if (activePlayer && activePlayer.getCurrentTime) {
-                    let diff = activePlayer.getCurrentTime() - d.progress;
-                    if (Math.abs(diff) > 5) activePlayer.seekTo(d.progress, true);
-                    else if (diff > 0.5) activePlayer.setPlaybackRate(0.95);
-                    else if (diff < -0.5) activePlayer.setPlaybackRate(1.05);
-                    else activePlayer.setPlaybackRate(1);
-                    
+                if(activePlayer && activePlayer.getCurrentTime) {
+                    let diff = Math.abs(activePlayer.getCurrentTime() - d.progress);
+                    if(diff > 2) activePlayer.seekTo(d.progress, true);
                     d.is_playing ? activePlayer.playVideo() : activePlayer.pauseVideo();
                 }
-                renderOuvintes(d.usuarios);
-            } catch(e) { document.getElementById('status-msg').innerText = "HOST OFFLINE (CLIQUE AQUI)"; }
+                
+                document.getElementById('status-msg').innerText = "● HOST ONLINE";
+                document.getElementById('status-msg').style.color = "#1DB954";
+            } catch(e) {
+                document.getElementById('status-msg').innerText = "● HOST OFFLINE";
+                document.getElementById('status-msg').style.color = "#ff4444";
+            }
         }
 
-        function atualizarLinkHost() {
-            let link = prompt("Cole o link do túnel (Ngrok/Localhost.run):", api_url);
-            if(link) { localStorage.setItem('jam_api_url', link.replace(/\/$/, "")); location.reload(); }
-        }
-
-        function saveProfile() {
-            let n = document.getElementById('inputName').value;
-            if(n) { localStorage.setItem('jam_name', n); document.getElementById('configModal').style.display='none'; }
-        }
-
-        function renderOuvintes(users) {
-            const p = document.getElementById('pile'); p.innerHTML = '';
-            users.forEach(u => {
-                p.innerHTML += `<div class="user-container"><div class="listener-avatar" style="background-image:url(${u.foto || 'https://www.gravatar.com/avatar/?d=mp'})"></div><div class="user-name-tag">${u.nome}</div></div>`;
-            });
+        function mudarHost() {
+            let n = prompt("Link do Ngrok:", api_url);
+            if(n) { api_url = n; location.reload(); }
         }
     </script>
 </body>
