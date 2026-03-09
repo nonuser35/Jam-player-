@@ -10,13 +10,8 @@
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #000; overflow: hidden; color: white; font-family: 'Montserrat', sans-serif; }
         .bg-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; overflow: hidden; }
         .bg-image { 
-            position: absolute; 
-            top: -10%; 
-            left: -10%; 
-            width: 120%; 
-            height: 120%; 
-            background-size: cover; 
-            background-position: center; 
+            position: absolute; top: -10%; left: -10%; width: 120%; height: 120%; 
+            background-size: cover; background-position: center; 
             transition: background-image 1.2s ease-in-out; 
             filter: blur(3px) brightness(0.3); 
             animation: backgroundMove 60s infinite alternate; 
@@ -27,8 +22,8 @@
         /* Layout Principal */
         .container { position: relative; display: flex; flex-direction: column; height: 100vh; padding: 40px; justify-content: space-between; z-index: 3; box-sizing: border-box; max-width: 1200px; margin: 0 auto; }
         
-        /* Barra de Fila Lateral */
-        .queue-sidebar { position: fixed; right: 40px; top: 50%; transform: translateY(-50%); width: 220px; background: rgba(255,255,255,0.05); backdrop-filter: blur(15px); border-radius: 25px; padding: 20px; border: 1px solid rgba(255,255,255,0.1); z-index: 10; }
+        /* Barra de Fila Lateral (AGORA NA ESQUERDA) */
+        .queue-sidebar { position: fixed; left: 40px; top: 50%; transform: translateY(-50%); width: 220px; background: rgba(255,255,255,0.05); backdrop-filter: blur(15px); border-radius: 25px; padding: 20px; border: 1px solid rgba(255,255,255,0.1); z-index: 10; }
         .queue-title { font-size: 0.65rem; font-weight: 800; color: #1DB954; letter-spacing: 3px; margin-bottom: 20px; text-align: center; }
         .queue-item { display: flex; align-items: center; margin-bottom: 15px; gap: 12px; transition: 0.3s; }
         .queue-item img { width: 40px; height: 40px; border-radius: 6px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
@@ -37,26 +32,28 @@
         .queue-info .q-artist { color: rgba(255,255,255,0.5); font-size: 0.65rem; margin-top: 2px; }
 
         .from-spotify { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; color: #1DB954; letter-spacing: 5px; margin-bottom: 5px; text-align: center; }
-        .top-right-bar { position: absolute; top: 40px; left: 40px; z-index: 5; } /* Movi para a esquerda para não bater com a fila */
-        .listeners-pile { display: flex; flex-direction: row; }
-        .user-container { display: flex; flex-direction: column; align-items: center; margin-right: -15px; transition: 0.4s; }
-        .listener-avatar { width: 48px; height: 48px; border-radius: 50%; background-size: cover; border: 3px solid #000; background-position: center; box-shadow: 5px 0 15px rgba(0,0,0,0.6); }
+        
+        /* OUVINTES (AGORA NA DIREITA) */
+        .top-right-bar { position: absolute; top: 40px; right: 40px; z-index: 5; } 
+        .listeners-pile { display: flex; flex-direction: row-reverse; } /* Invertido para empilhar bonito na direita */
+        .user-container { display: flex; flex-direction: column; align-items: center; margin-left: -15px; transition: 0.4s; }
+        .listener-avatar { width: 48px; height: 48px; border-radius: 50%; background-size: cover; border: 3px solid #000; background-position: center; box-shadow: -5px 0 15px rgba(0,0,0,0.6); }
         .user-name-tag { font-size: 0.55rem; font-weight: 800; margin-top: 6px; text-transform: uppercase; background: rgba(0,0,0,0.7); padding: 3px 8px; border-radius: 5px; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         
-        .art-section { flex-grow: 1; display: flex; align-items: center; justify-content: center; padding: 20px 0; margin-right: 200px; } /* Deslocado para o centro real ignorando a fila */
+        .art-section { flex-grow: 1; display: flex; align-items: center; justify-content: center; padding: 20px 0; }
         .circle-art { width: 320px; height: 320px; border-radius: 50%; background-size: cover; background-position: center; box-shadow: 0 30px 100px rgba(0,0,0,0.9); border: 2px solid rgba(255,255,255,0.1); animation: spin 40s linear infinite; animation-play-state: paused; transition: background-image 0.8s; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         
         .yt-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-        .controls-section { width: 100%; max-width: 700px; margin-bottom: 50px; }
-        .song-title { font-size: 2.2rem; font-weight: 800; margin: 0; letter-spacing: -1.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .artist { font-size: 1.2rem; color: rgba(255, 255, 255, 0.5); margin-top: 5px; font-weight: 400; }
-        .lyrics-row { display: flex; align-items: center; min-height: 60px; margin: 20px 0; }
+        .controls-section { width: 100%; max-width: 700px; margin: 0 auto 50px auto; }
+        .song-title { font-size: 2.2rem; font-weight: 800; margin: 0; letter-spacing: -1.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
+        .artist { font-size: 1.2rem; color: rgba(255, 255, 255, 0.5); margin-top: 5px; font-weight: 400; text-align: center; }
+        .lyrics-row { display: flex; align-items: center; justify-content: center; min-height: 60px; margin: 20px 0; text-align: center; }
         #current-lyric-line { font-size: 1.4rem; font-weight: 700; color: #fff; line-height: 1.4; transition: opacity 0.3s; text-shadow: 0 4px 15px rgba(0,0,0,0.5); }
         .bar-bg { width: 100%; height: 5px; background: rgba(255,255,255,0.1); border-radius: 10px; cursor: pointer; position: relative; }
         .bar-fill { width: 0%; height: 100%; background: #fff; border-radius: 10px; transition: width 0.3s linear; }
         .time-info { display: flex; justify-content: space-between; font-size: 0.85rem; color: rgba(255, 255, 255, 0.4); margin-top: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
-        .btns { display: flex; justify-content: space-between; align-items: center; margin-top: 25px; padding: 0 10px; }
+        .btns { display: flex; justify-content: center; gap: 30px; align-items: center; margin-top: 25px; }
         .btns button { font-size: 1.6rem; opacity: 0.7; transition: 0.3s; color: white; background: none; border: none; cursor: pointer; }
         .btns button:hover { opacity: 1; transform: scale(1.15); }
         .play { font-size: 4.5rem !important; opacity: 1 !important; color: #fff !important; }
@@ -67,7 +64,6 @@
         .tool-btn { width: 50px; height: 50px; border-radius: 50%; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 1.2rem; cursor: pointer; transition: 0.3s; }
         .tool-btn:hover { background: #1DB954; color: #000; border-color: #1DB954; }
 
-        /* Modais */
         .modal-config { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.92); z-index: 100; display: none; align-items: center; justify-content: center; backdrop-filter: blur(25px); }
         .modal-box { background: #121212; padding: 40px; border-radius: 30px; width: 320px; text-align: center; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 25px 60px rgba(0,0,0,0.8); }
         .modal-box input { width: 100%; background: #222; border: 1px solid #333; padding: 15px; border-radius: 12px; color: #fff; margin-bottom: 20px; box-sizing: border-box; font-family: Montserrat; font-size: 1rem; }
@@ -84,8 +80,7 @@
     
     <div class="queue-sidebar" id="queueList">
         <p class="queue-title">PRÓXIMAS</p>
-        <div id="queueItems">
-            </div>
+        <div id="queueItems"></div>
     </div>
 
     <div class="modal-config" id="configModal">
@@ -150,7 +145,7 @@
         }
 
         function initApp() {
-            setInterval(syncComServidor, 500);
+            setInterval(syncComServidor, 800);
             checkSavedProfile();
             document.getElementById('volRange').addEventListener('input', (e) => {
                 if(activePlayer) activePlayer.setVolume(e.target.value);
@@ -208,14 +203,12 @@
                 const d = await res.json();
                 firstSync = false;
 
-                // Troca de Música
                 const trackId = d.track_name + d.artist_name;
                 if (trackId !== lastTrackId && d.track_name) {
                     lastTrackId = trackId;
                     fetchLyrics(d.track_name, d.artist_name, d.duration);
                 }
 
-                // UI Básica
                 document.getElementById('trackTitle').innerText = d.track_name || "Pausado";
                 document.getElementById('trackArtist').innerText = d.artist_name || "";
                 document.getElementById('progress').style.width = ((d.progress / d.duration) * 100) + "%";
@@ -243,7 +236,6 @@
                     `).join('');
                 }
 
-                // Troca de Player
                 if (d.video_id && d.video_id !== lastVid) {
                     let next = (activePlayer === p1) ? p2 : p1;
                     next.loadVideoById(d.video_id, d.progress);
@@ -253,7 +245,7 @@
                     activePlayer.setVolume(document.getElementById('volRange').value);
                 }
 
-                // Sincronização
+                // Sincronização Estável (ANTI-PULO)
                 if (activePlayer && activePlayer.getPlayerState) {
                     const ytState = activePlayer.getPlayerState();
                     if (d.is_playing) {
@@ -261,11 +253,13 @@
                         const pTime = activePlayer.getCurrentTime();
                         updateLyrics(pTime);
                         let diff = pTime - d.progress;
-                        if (Math.abs(diff) > 2.5) {
+                        
+                        // Margem maior para evitar o pula-pula
+                        if (Math.abs(diff) > 3.0) {
                             activePlayer.seekTo(d.progress, true);
-                        } else if (diff > 0.5) {
+                        } else if (diff > 0.8) {
                             activePlayer.setPlaybackRate(0.95);
-                        } else if (diff < -0.5) {
+                        } else if (diff < -0.8) {
                             activePlayer.setPlaybackRate(1.05);
                         } else {
                             activePlayer.setPlaybackRate(1);
