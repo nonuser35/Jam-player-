@@ -61,7 +61,8 @@
     <script src="https://www.youtube.com/iframe_api"></script>
     <script>
         let p1, p2, activePlayer, lastVidId = "", currentLyrics = [];
-        let api_url = localStorage.getItem('jam_api_url') || "";
+        // Substitua o que estiver lá por isto:
+        let api_url = "https://jagger-preelectric-densely.ngrok-free.dev";
 
         function onYouTubeIframeAPIReady() {
             p1 = new YT.Player('player1', { height: '1', width: '1', events: { 'onReady': init } });
