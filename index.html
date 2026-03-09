@@ -207,15 +207,35 @@
                 }
 
                 if (activePlayer && activePlayer.getCurrentTime && !isLocalPaused) {
-                    const pTime = activePlayer.getCurrentTime();
-                    updateLyrics(pTime);
-                    let diff = pTime - d.progress;
-                    if (Math.abs(diff) > 2.5) activePlayer.seekTo(d.progress, true);
-                    else if (diff > 0.2) activePlayer.setPlaybackRate(0.95);
-                    else if (diff < -0.2) activePlayer.setPlaybackRate(1.05);
-                    else activePlayer.setPlaybackRate(1);
+    const pTime = activePlayer.getCurrentTime();
+    updateLyrics(pTime);
+    
+    let diff = pTime - d.progress;
 
-                    d.is_playing ? activePlayer.playVideo() : activePlayer.pauseVideo();
+    // 1. Se a diferença for gigante (mais de 3s), dá um pulo direto (Seek)
+    if (Math.abs(diff) > 3) {
+        activePlayer.seekTo(d.progress, true);
+        activePlayer.setPlaybackRate(1); 
+    } 
+    // 2. Se a diferença for entre 0.5s e 3s, acelera/desacelera de leve
+    else if (diff > 0.5) {
+        activePlayer.setPlaybackRate(0.98); // Atrasa um pouquinho
+    } 
+    else if (diff < -0.5) {
+        activePlayer.setPlaybackRate(1.02); // Corre um pouquinho
+    } 
+    // 3. Se estiver "perto o suficiente", mantém velocidade normal
+    else {
+        activePlayer.setPlaybackRate(1);
+    }
+
+    // Garante que o estado de Play/Pause do Host seja respeitado
+    if (d.is_playing && activePlayer.getPlayerState() !== 1) {
+        activePlayer.playVideo();
+    } else if (!d.is_playing && activePlayer.getPlayerState() === 1) {
+        activePlayer.pauseVideo();
+    }
+}
                 }
                 renderizarOuvintes(d.usuarios);
             } catch(e) {}
