@@ -1,40 +1,135 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    </head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mirror Player Pro</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700;800&display=swap" rel="stylesheet">
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #000; overflow: hidden; color: white; font-family: 'Montserrat', sans-serif; }
+        .bg-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; overflow: hidden; }
+        .bg-image { position: absolute; top: -5%; left: -5%; width: 110%; height: 110%; background-size: cover; background-position: center; transition: background-image 1s ease-in-out; filter: blur(15px) brightness(0.5); animation: backgroundMove 40s ease-in-out infinite alternate; }
+        @keyframes backgroundMove { 0% { transform: scale(1); } 100% { transform: scale(1.1); } }
+        .container { position: relative; display: flex; flex-direction: column; height: 100vh; padding: 30px 40px; justify-content: space-between; z-index: 3; box-sizing: border-box; max-width: 900px; margin: 0 auto; }
+        #status-msg { font-size: 0.9rem; font-weight: 700; cursor: pointer; opacity: 0.7; transition: 0.3s; }
+        #status-msg:hover { opacity: 1; color: #1DB954; }
+        .top-right-bar { position: absolute; top: 30px; right: 40px; z-index: 5; }
+        .listeners-pile { display: flex; flex-direction: row-reverse; }
+        .user-container { display: flex; flex-direction: column; align-items: center; margin-left: -15px; }
+        .listener-avatar { width: 45px; height: 45px; border-radius: 50%; background-size: cover; border: 2px solid #000; box-shadow: -5px 0 10px rgba(0,0,0,0.5); }
+        .user-name-tag { font-size: 0.5rem; font-weight: 800; margin-top: 4px; background: rgba(0,0,0,0.7); padding: 2px 5px; border-radius: 4px; }
+        .circle-art { width: 300px; height: 300px; border-radius: 50%; background-size: cover; margin: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.8); animation: spin 30s linear infinite; border: 2px solid rgba(255,255,255,0.1); }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .yt-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+        .song-title { font-size: 2rem; font-weight: 800; margin: 0; }
+        .artist { font-size: 1.1rem; color: rgba(255,255,255,0.6); }
+        .bar-bg { width: 100%; height: 6px; background: rgba(255,255,255,0.2); border-radius: 10px; margin-top: 20px; }
+        .bar-fill { width: 0%; height: 100%; background: #fff; border-radius: 10px; transition: width 0.5s linear; }
+        #current-lyric-line { min-height: 30px; margin: 15px 0; font-size: 1.2rem; font-weight: 700; }
+        .modal-config { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 100; display: none; align-items: center; justify-content: center; backdrop-filter: blur(10px); }
+        .modal-box { background: #111; padding: 30px; border-radius: 20px; text-align: center; width: 300px; border: 1px solid #333; }
+        input[type="text"] { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: none; background: #222; color: #fff; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; border-radius: 8px; border: none; background: #fff; font-weight: 800; cursor: pointer; }
+    </style>
+</head>
 <body>
+    <div id="player1" class="yt-hidden"></div>
+    <div id="player2" class="yt-hidden"></div>
+    <div class="bg-container"><div class="bg-image" id="bgImg"></div></div>
+    
+    <div class="modal-config" id="configModal">
+        <div class="modal-box">
+            <h3 id="modalTitle">PERFIL</h3>
+            <input type="text" id="inputName" placeholder="Seu apelido...">
+            <button onclick="saveProfile()">ENTRAR</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div id="status-msg" onclick="atualizarLinkHost()">CONECTAR AO HOST</div>
+        <div class="top-right-bar"><div class="listeners-pile" id="pile"></div></div>
+        <div class="circle-art" id="mainArt"></div>
+        <div class="controls-section">
+            <p class="song-title" id="trackTitle">Aguardando...</p>
+            <p class="artist" id="trackArtist">...</p>
+            <p id="current-lyric-line">...</p>
+            <div class="bar-bg"><div class="bar-fill" id="progress"></div></div>
+        </div>
+    </div>
+
     <script src="https://www.youtube.com/iframe_api"></script>
     <script>
-        // MUDANÇA IMPORTANTE: Coloque aqui o seu link do túnel SSH
-        let api_url = "https://seu-link-aleatorio.lhr.life"; 
+        let p1, p2, activePlayer, lastVidId = "", currentLyrics = [];
+        let api_url = localStorage.getItem('jam_api_url') || "";
 
-        let p1, p2; 
-        let activePlayer = null;
-        let lastVidId = "";
-        let firstSync = true;
-        let currentLyrics = [];
-        let lastTrackInfo = "";
+        function onYouTubeIframeAPIReady() {
+            p1 = new YT.Player('player1', { height: '1', width: '1', events: { 'onReady': init } });
+            p2 = new YT.Player('player2', { height: '1', width: '1', events: { 'onReady': init } });
+        }
 
-        // ... (As funções onYouTubeIframeAPIReady e startSync continuam iguais) ...
+        function init() {
+            if (p1 && p2 && !activePlayer) {
+                activePlayer = p1;
+                setInterval(sync, 1000);
+                if(!localStorage.getItem('jam_name')) document.getElementById('configModal').style.display='flex';
+            }
+        }
 
-        async function syncComServidor() {
-            const nome = localStorage.getItem('jam_name');
-            const foto = localStorage.getItem('jam_pic') || "";
-            if(!nome) return;
-
+        async function sync() {
+            if(!api_url) return;
             try {
-                // AGORA BUSCAMOS NO SEU TÚNEL SSH (API_URL)
                 const res = await fetch(`${api_url}/status`, {
-                    method: 'POST', 
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ nome, foto: firstSync ? foto : "" })
+                    method: 'POST',
+                    body: JSON.stringify({ nome: localStorage.getItem('jam_name'), foto: localStorage.getItem('jam_pic') || "" })
                 });
                 const d = await res.json();
                 
-                // ... (O resto da lógica de Double Buffering e Velocidade continua igual) ...
-            } catch(e) { console.error("Erro ao conectar no seu PC:", e); }
+                document.getElementById('trackTitle').innerText = d.track_name;
+                document.getElementById('trackArtist').innerText = d.artist_name;
+                document.getElementById('progress').style.width = (d.progress/d.duration*100) + "%";
+                document.getElementById('mainArt').style.backgroundImage = `url(${d.capa})`;
+                document.getElementById('bgImg').style.backgroundImage = `url(${d.capa})`;
+
+                // 1. Double Buffering
+                if (d.video_id && d.video_id !== lastVidId) {
+                    let next = (activePlayer === p1) ? p2 : p1;
+                    next.loadVideoById(d.video_id, d.progress);
+                    activePlayer.pauseVideo();
+                    activePlayer = next;
+                    lastVidId = d.video_id;
+                }
+
+                // 2. Velocidade Dinâmica
+                if (activePlayer && activePlayer.getCurrentTime) {
+                    let diff = activePlayer.getCurrentTime() - d.progress;
+                    if (Math.abs(diff) > 5) activePlayer.seekTo(d.progress, true);
+                    else if (diff > 0.5) activePlayer.setPlaybackRate(0.95);
+                    else if (diff < -0.5) activePlayer.setPlaybackRate(1.05);
+                    else activePlayer.setPlaybackRate(1);
+                    
+                    d.is_playing ? activePlayer.playVideo() : activePlayer.pauseVideo();
+                }
+                renderOuvintes(d.usuarios);
+            } catch(e) { document.getElementById('status-msg').innerText = "HOST OFFLINE (CLIQUE AQUI)"; }
         }
-        // ... (O resto do JavaScript continua igual) ...
+
+        function atualizarLinkHost() {
+            let link = prompt("Cole o link do túnel (Ngrok/Localhost.run):", api_url);
+            if(link) { localStorage.setItem('jam_api_url', link.replace(/\/$/, "")); location.reload(); }
+        }
+
+        function saveProfile() {
+            let n = document.getElementById('inputName').value;
+            if(n) { localStorage.setItem('jam_name', n); document.getElementById('configModal').style.display='none'; }
+        }
+
+        function renderOuvintes(users) {
+            const p = document.getElementById('pile'); p.innerHTML = '';
+            users.forEach(u => {
+                p.innerHTML += `<div class="user-container"><div class="listener-avatar" style="background-image:url(${u.foto || 'https://www.gravatar.com/avatar/?d=mp'})"></div><div class="user-name-tag">${u.nome}</div></div>`;
+            });
+        }
     </script>
 </body>
 </html>
