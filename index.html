@@ -4,8 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jam Sync Player | Ultra Sync</title>
+    
+    <link rel="preconnect" href="https://www.youtube.com">
+    <link rel="preconnect" href="https://jagger-preelectric-densely.ngrok-free.dev">
+    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700;800&display=swap" rel="stylesheet">
+    
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #000; overflow: hidden; color: white; font-family: 'Montserrat', sans-serif; }
         .bg-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; overflow: hidden; }
@@ -13,67 +18,76 @@
             position: absolute; top: -10%; left: -10%; width: 120%; height: 120%; 
             background-size: cover; background-position: center; 
             transition: background-image 1.2s ease-in-out; 
-            filter: blur(8px) brightness(0.3); 
+            filter: blur(10px) brightness(0.25); 
             animation: backgroundMove 60s infinite alternate; 
         }
         @keyframes backgroundMove { 0% { transform: scale(1); } 100% { transform: scale(1.15); } }
         .glass-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.3); z-index: 2; }
         
-        /* Layout Principal */
         .container { position: relative; display: flex; flex-direction: column; height: 100vh; padding: 40px; justify-content: space-between; z-index: 3; box-sizing: border-box; max-width: 1200px; margin: 0 auto; }
         
-        /* Fila Lateral */
-        .queue-sidebar { position: fixed; left: 40px; top: 50%; transform: translateY(-50%); width: 220px; background: rgba(255,255,255,0.05); backdrop-filter: blur(15px); border-radius: 25px; padding: 20px; border: 1px solid rgba(255,255,255,0.1); z-index: 10; }
+        /* FILA LATERAL */
+        .queue-sidebar { position: fixed; left: 40px; top: 50%; transform: translateY(-50%); width: 220px; background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); border-radius: 25px; padding: 20px; border: 1px solid rgba(255,255,255,0.1); z-index: 10; }
         .queue-title { font-size: 0.65rem; font-weight: 800; color: #1DB954; letter-spacing: 3px; margin-bottom: 20px; text-align: center; }
-        .queue-item { display: flex; align-items: center; margin-bottom: 15px; gap: 12px; transition: 0.3s; }
-        .queue-item img { width: 40px; height: 40px; border-radius: 6px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-        .queue-info { overflow: hidden; }
+        .queue-item { display: flex; align-items: center; margin-bottom: 15px; gap: 12px; }
+        .queue-item img { width: 40px; height: 40px; border-radius: 6px; }
         .queue-info p { margin: 0; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .queue-info .q-artist { color: rgba(255,255,255,0.5); font-size: 0.65rem; margin-top: 2px; }
+        .queue-info .q-artist { color: rgba(255,255,255,0.5); font-size: 0.65rem; }
 
-        .from-spotify { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; color: #1DB954; letter-spacing: 5px; margin-bottom: 5px; text-align: center; }
-        
-        /* Ouvintes */
+        /* OUVINTES E PERFIS (NOMES NO HOVER) */
         .top-right-bar { position: absolute; top: 40px; right: 40px; z-index: 5; } 
-        .listeners-pile { display: flex; flex-direction: row-reverse; }
-        .user-container { display: flex; flex-direction: column; align-items: center; margin-left: -15px; transition: 0.4s; }
-        .listener-avatar { width: 48px; height: 48px; border-radius: 50%; background-size: cover; border: 3px solid #000; background-position: center; box-shadow: -5px 0 15px rgba(0,0,0,0.6); }
-        .user-name-tag { font-size: 0.55rem; font-weight: 800; margin-top: 6px; text-transform: uppercase; background: rgba(0,0,0,0.7); padding: 3px 8px; border-radius: 5px; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .listeners-pile { display: flex; flex-direction: row-reverse; gap: 5px; }
         
-        /* Player Visual */
-        .art-section { flex-grow: 1; display: flex; align-items: center; justify-content: center; padding: 20px 0; }
-        .circle-art { width: 320px; height: 320px; border-radius: 50%; background-size: cover; background-position: center; box-shadow: 0 30px 100px rgba(0,0,0,0.9); border: 2px solid rgba(255,255,255,0.1); animation: spin 40s linear infinite; animation-play-state: paused; transition: background-image 0.8s; }
+        .user-container { position: relative; display: flex; flex-direction: column; align-items: center; margin-left: -12px; transition: 0.3s; cursor: pointer; }
+        .listener-avatar { width: 48px; height: 48px; border-radius: 50%; background-size: cover; border: 3px solid #000; background-position: center; box-shadow: -5px 0 15px rgba(0,0,0,0.5); z-index: 1; }
+        
+        .user-name-tag { 
+            position: absolute; top: -35px; left: 50%; transform: translateX(-50%) translateY(10px);
+            opacity: 0; transition: 0.3s; pointer-events: none;
+            background: #1DB954; color: #000; font-size: 0.6rem; font-weight: 800;
+            padding: 4px 10px; border-radius: 6px; white-space: nowrap; z-index: 10;
+        }
+        .user-container:hover .user-name-tag { opacity: 1; transform: translateX(-50%) translateY(0); }
+        .user-container:hover { margin-left: 5px; margin-right: 5px; }
+
+        /* Estilo para "VOCÊ" (Dono ou Local) */
+        .user-container.is-me .listener-avatar { border-color: #fff; }
+        .user-container.is-me .user-name-tag { opacity: 1; transform: translateX(-50%) translateY(0); background: #fff; }
+
+        /* PLAYER VISUAL */
+        .art-section { flex-grow: 1; display: flex; align-items: center; justify-content: center; }
+        .circle-art { width: 320px; height: 320px; border-radius: 50%; background-size: cover; background-position: center; box-shadow: 0 30px 100px rgba(0,0,0,0.8); border: 2px solid rgba(255,255,255,0.1); animation: spin 40s linear infinite; animation-play-state: paused; transition: 0.8s; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         
-        /* YouTube Oculto */
         .yt-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
         
-        /* Controles */
+        /* CONTROLES */
         .controls-section { width: 100%; max-width: 700px; margin: 0 auto 50px auto; }
-        .song-title { font-size: 2.2rem; font-weight: 800; margin: 0; letter-spacing: -1.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
-        .artist { font-size: 1.2rem; color: rgba(255, 255, 255, 0.5); margin-top: 5px; font-weight: 400; text-align: center; }
-        .lyrics-row { display: flex; align-items: center; justify-content: center; min-height: 60px; margin: 20px 0; text-align: center; }
-        #current-lyric-line { font-size: 1.4rem; font-weight: 700; color: #fff; line-height: 1.4; transition: opacity 0.3s; text-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        .bar-bg { width: 100%; height: 5px; background: rgba(255,255,255,0.1); border-radius: 10px; cursor: pointer; position: relative; }
-        .bar-fill { width: 0%; height: 100%; background: #fff; border-radius: 10px; transition: width 0.3s linear; }
-        .time-info { display: flex; justify-content: space-between; font-size: 0.85rem; color: rgba(255, 255, 255, 0.4); margin-top: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
-        .btns { display: flex; justify-content: center; gap: 30px; align-items: center; margin-top: 25px; }
-        .btns button { font-size: 1.6rem; opacity: 0.7; transition: 0.3s; color: white; background: none; border: none; cursor: pointer; }
-        .btns button:hover { opacity: 1; transform: scale(1.15); }
-        .play { font-size: 4.5rem !important; opacity: 1 !important; color: #fff !important; }
+        .song-title { font-size: 2.2rem; font-weight: 800; margin: 0; text-align: center; letter-spacing: -1.5px; }
+        .artist { font-size: 1.2rem; color: rgba(255, 255, 255, 0.5); margin-top: 5px; text-align: center; }
+        .lyrics-row { display: flex; align-items: center; justify-content: center; min-height: 60px; margin: 20px 0; }
+        #current-lyric-line { font-size: 1.4rem; font-weight: 700; text-align: center; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
         
-        .volume-popover { position: absolute; bottom: 40px; right: 110px; width: 160px; height: 50px; background: rgba(255,255,255,0.12); backdrop-filter: blur(25px); border-radius: 30px; display: none; align-items: center; justify-content: center; z-index: 20; padding: 0 20px; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 10px 30px rgba(0,0,0,0.4); }
-        .volume-popover input { width: 100%; cursor: pointer; accent-color: #1DB954; height: 4px; }
-        .footer-tools { position: absolute; bottom: 40px; left: 0; width: 100%; padding: 0 40px; display: flex; justify-content: space-between; box-sizing: border-box; z-index: 10; }
-        .tool-btn { width: 50px; height: 50px; border-radius: 50%; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 1.2rem; cursor: pointer; transition: 0.3s; }
-        .tool-btn:hover { background: #1DB954; color: #000; border-color: #1DB954; }
+        .bar-bg { width: 100%; height: 5px; background: rgba(255,255,255,0.1); border-radius: 10px; cursor: pointer; }
+        .bar-fill { width: 0%; height: 100%; background: #fff; border-radius: 10px; transition: width 0.3s linear; }
+        .time-info { display: flex; justify-content: space-between; font-size: 0.8rem; color: rgba(255,255,255,0.4); margin-top: 8px; font-weight: 700; }
+        
+        .btns { display: flex; justify-content: center; gap: 30px; align-items: center; margin-top: 25px; }
+        .btns button { font-size: 1.5rem; opacity: 0.6; transition: 0.3s; color: white; background: none; border: none; cursor: pointer; }
+        .btns button:hover { opacity: 1; transform: scale(1.1); }
+        .play { font-size: 4rem !important; opacity: 1 !important; }
 
-        .modal-config { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.92); z-index: 100; display: none; align-items: center; justify-content: center; backdrop-filter: blur(25px); }
-        .modal-box { background: #121212; padding: 40px; border-radius: 30px; width: 320px; text-align: center; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 25px 60px rgba(0,0,0,0.8); }
-        .modal-box input { width: 100%; background: #222; border: 1px solid #333; padding: 15px; border-radius: 12px; color: #fff; margin-bottom: 20px; box-sizing: border-box; font-family: Montserrat; font-size: 1rem; }
-        .btn-group { display: flex; gap: 12px; }
-        .btn-main { background: #1DB954; color: #000; padding: 15px; flex: 2; border-radius: 12px; font-weight: 800; cursor: pointer; border: none; font-size: 0.9rem; }
-        .btn-cancel { background: rgba(255,255,255,0.1); color: #fff; padding: 15px; flex: 1; border-radius: 12px; font-weight: 600; cursor: pointer; border: none; font-size: 0.9rem; }
+        /* MODAL */
+        .modal-config { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 100; display: none; align-items: center; justify-content: center; backdrop-filter: blur(20px); }
+        .modal-box { background: #181818; padding: 40px; border-radius: 25px; width: 300px; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
+        .modal-box input { width: 100%; background: #282828; border: 1px solid #333; padding: 12px; border-radius: 8px; color: #fff; margin-bottom: 15px; box-sizing: border-box; }
+        .btn-main { background: #1DB954; color: #000; padding: 12px; width: 100%; border-radius: 8px; font-weight: 800; cursor: pointer; border: none; }
+        
+        .volume-popover { position: absolute; bottom: 40px; right: 110px; width: 160px; height: 50px; background: rgba(255,255,255,0.1); backdrop-filter: blur(20px); border-radius: 30px; display: none; align-items: center; justify-content: center; z-index: 20; padding: 0 20px; border: 1px solid rgba(255,255,255,0.1); }
+        .volume-popover input { width: 100%; cursor: pointer; accent-color: #1DB954; }
+        .footer-tools { position: absolute; bottom: 40px; left: 40px; right: 40px; display: flex; justify-content: space-between; z-index: 10; }
+        .tool-btn { width: 45px; height: 45px; border-radius: 50%; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.3s; }
+        .tool-btn:hover { background: #1DB954; color: #000; }
     </style>
 </head>
 <body>
@@ -90,39 +104,32 @@
 
     <div class="modal-config" id="configModal">
         <div class="modal-box">
-            <p style="font-size: 0.75rem; letter-spacing: 3px; font-weight: 800; color: #1DB954; margin-bottom: 25px;">CONFIGURAR JAM</p>
-            <input type="text" id="inputName" placeholder="Como quer ser chamado?">
-            <label style="display:block; background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; font-size:0.85rem; cursor:pointer; border:1px dashed #555; margin-bottom:20px;">
-                <i class="fas fa-camera" style="margin-right:8px;"></i> Foto de Perfil
+            <p style="font-size: 0.7rem; letter-spacing: 2px; font-weight: 800; color: #1DB954; margin-bottom: 20px;">ENTRAR NA JAM</p>
+            <input type="text" id="inputName" placeholder="Seu apelido">
+            <label style="display:block; background:rgba(255,255,255,0.05); padding:12px; border-radius:8px; font-size:0.8rem; cursor:pointer; border:1px dashed #444; margin-bottom:15px;">
+                <i class="fas fa-camera"></i> Foto (Opcional)
                 <input type="file" id="inputFile" accept="image/*" style="display: none;">
             </label>
-            <div class="btn-group">
-                <button class="btn-cancel" onclick="toggleConfig()">Cancelar</button>
-                <button class="btn-main" onclick="saveProfile()">Entrar na Jam</button>
-            </div>
+            <button class="btn-main" onclick="saveProfile()">Conectar</button>
         </div>
     </div>
 
     <div class="volume-popover" id="volumePop"><input type="range" min="0" max="100" value="70" id="volRange"></div>
 
     <div class="container">
-        <div class="header-info"><p class="from-spotify" id="status-msg">JAM SYNC ATIVA</p></div>
         <div class="top-right-bar"><div class="listeners-pile" id="pile"></div></div>
-        
         <div class="art-section"><div class="circle-art" id="mainArt"></div></div>
         
         <div class="controls-section">
-            <div class="track-info">
-                <p class="song-title" id="trackTitle">Aguardando Host...</p>
-                <p class="artist" id="trackArtist">Inicie uma música no Spotify</p>
-            </div>
+            <p class="song-title" id="trackTitle">Sincronizando...</p>
+            <p class="artist" id="trackArtist">Aguarde o Host</p>
             <div class="lyrics-row"><p id="current-lyric-line"></p></div>
             <div class="bar-bg"><div class="bar-fill" id="progress"></div></div>
             <div class="time-info"><span id="currTime">0:00</span><span id="totalTime">0:00</span></div>
             <div class="btns">
                 <button onclick="sendCommand('shuffle')"><i class="fas fa-random"></i></button>
                 <button onclick="sendCommand('prev')"><i class="fas fa-step-backward"></i></button>
-                <button class="play" id="playIcon" onclick="handlePlayPause()"><i class="fas fa-pause-circle"></i></button>
+                <button class="play" id="playIcon" onclick="sendCommand('playpause')"><i class="fas fa-pause-circle"></i></button>
                 <button onclick="sendCommand('next')"><i class="fas fa-step-forward"></i></button>
                 <button onclick="sendCommand('repeat')"><i class="fas fa-redo"></i></button>
             </div>
@@ -131,30 +138,28 @@
 
     <div class="footer-tools">
         <div class="tool-btn" onclick="toggleConfig()"><i class="fas fa-user-edit"></i></div>
-        <div class="tool-btn" onclick="toggleVolume()"><i class="fas fa-volume-up"></i></div>
+        <div class="tool-btn" id="volBtn" onclick="toggleVolume()"><i class="fas fa-volume-up"></i></div>
     </div>
 
-    <script src="https://www.youtube.com/iframe_api"></script>
+    <script src="https://www.youtube.com/iframe_api" async></script>
     <script>
         const API_BASE = "https://jagger-preelectric-densely.ngrok-free.dev"; 
 
-        // PILAR 1: REGISTRO DO SERVICE WORKER
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js').catch(err => console.log("SW Fail:", err));
+            navigator.serviceWorker.register('sw.js').catch(() => {});
         }
 
-        let p1, p2, activePlayer, lastVid = "", lastTrackId = "", firstSync = true;
-        let volTimer;
+        let p1, p2, activePlayer, lastVid = "", lastTrackId = "", firstSync = true, volTimer;
         let currentLyrics = [];
 
         function onYouTubeIframeAPIReady() {
-            const playerConfig = { height: '1', width: '1', playerVars: {'controls': 0, 'disablekb': 1, 'origin': window.location.origin} };
-            p1 = new YT.Player('player1', { ...playerConfig, events: { 'onReady': () => { if(p2) initApp(); } } });
-            p2 = new YT.Player('player2', { ...playerConfig, events: { 'onReady': () => { if(p1) initApp(); } } });
+            const cfg = { height: '1', width: '1', playerVars: {'controls': 0, 'disablekb': 1, 'origin': window.location.origin} };
+            p1 = new YT.Player('player1', { ...cfg, events: { 'onReady': () => { if(p2) initApp(); } } });
+            p2 = new YT.Player('player2', { ...cfg, events: { 'onReady': () => { if(p1) initApp(); } } });
         }
 
         function initApp() {
-            setInterval(syncComServidor, 800);
+            setInterval(syncComServidor, 850);
             checkSavedProfile();
             document.getElementById('volRange').addEventListener('input', (e) => {
                 if(activePlayer) activePlayer.setVolume(e.target.value);
@@ -162,48 +167,12 @@
             });
         }
 
-        // --- LÓGICA DE LETRAS ---
-        async function fetchLyrics(track, artist, duration) {
-            try {
-                const url = `https://lrclib.net/api/get?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(track)}&duration=${Math.round(duration)}`;
-                const res = await fetch(url);
-                const data = await res.json();
-                if (data && data.syncedLyrics) parseLyrics(data.syncedLyrics);
-                else currentLyrics = [{ time: 0, text: "Instrumental" }];
-            } catch (e) { currentLyrics = []; }
-        }
-
-        function parseLyrics(lrc) {
-            currentLyrics = lrc.split('\n').map(line => {
-                const m = line.match(/\[(\d+):(\d+\.\d+)\](.*)/);
-                return m ? { time: parseInt(m[1])*60 + parseFloat(m[2]), text: m[3].trim() } : null;
-            }).filter(l => l !== null);
-        }
-
-        function updateLyrics(currentTime) {
-            const line = currentLyrics.reduce((prev, curr) => (curr.time <= currentTime) ? curr : prev, { text: "" });
-            document.getElementById('current-lyric-line').innerText = line.text;
-        }
-
-        // --- COMANDOS ---
-        async function sendCommand(cmd) {
-            try { 
-                await fetch(`${API_BASE}/command`, { 
-                    method: 'POST', 
-                    headers: {'ngrok-skip-browser-warning': 'true', 'Content-Type': 'application/json'},
-                    body: JSON.stringify({cmd: cmd}) 
-                }); 
-            } catch(e){}
-        }
-
-        function handlePlayPause() { sendCommand('playpause'); }
-
-        // --- SINCRONIZAÇÃO MESTRA ---
         async function syncComServidor() {
             const payload = { 
                 nome: localStorage.getItem('jam_name') || "Ouvinte", 
-                foto: firstSync ? localStorage.getItem('jam_pic') : "" 
+                foto: firstSync ? (localStorage.getItem('jam_pic') || "") : "" 
             };
+
             try {
                 const res = await fetch(`${API_BASE}/status`, {
                     method: 'POST', 
@@ -213,14 +182,12 @@
                 const d = await res.json();
                 firstSync = false;
 
-                // Troca de Letras
-                const trackId = d.track_name + d.artist_name;
-                if (trackId !== lastTrackId && d.track_name) {
-                    lastTrackId = trackId;
-                    fetchLyrics(d.track_name, d.artist_name, d.duration);
+                // AUTOMATIZAÇÃO: Puxar foto do Spotify do Host se o servidor enviar
+                if (d.user_spotify_pic && !localStorage.getItem('jam_pic')) {
+                    localStorage.setItem('jam_pic', d.user_spotify_pic);
                 }
 
-                // UI Updates
+                // UI UPDATES
                 document.getElementById('trackTitle').innerText = d.track_name || "Pausado";
                 document.getElementById('trackArtist').innerText = d.artist_name || "";
                 document.getElementById('progress').style.width = ((d.progress / d.duration) * 100) + "%";
@@ -234,7 +201,7 @@
                     document.getElementById('bgImg').style.backgroundImage = `url(${d.capa})`;
                 }
 
-                // Render Queue
+                // QUEUE RENDER
                 if (d.fila) {
                     document.getElementById('queueItems').innerHTML = d.fila.map(m => `
                         <div class="queue-item">
@@ -243,7 +210,7 @@
                         </div>`).join('');
                 }
 
-                // PILAR 2: LÓGICA DE DOUBLE BUFFERING
+                // DOUBLE BUFFERING & SYNC
                 if (d.video_id && d.video_id !== lastVid) {
                     let next = (activePlayer === p1) ? p2 : p1;
                     next.loadVideoById(d.video_id, d.progress);
@@ -253,54 +220,40 @@
                     activePlayer.setVolume(document.getElementById('volRange').value);
                 }
 
-                // PILAR 3: SINCRONIZAÇÃO DINÂMICA (ANTI-ENGASGO)
                 if (activePlayer && activePlayer.getPlayerState) {
                     const ytState = activePlayer.getPlayerState();
                     if (d.is_playing) {
                         if (ytState !== 1 && ytState !== 3) activePlayer.playVideo();
                         const pTime = activePlayer.getCurrentTime();
-                        updateLyrics(pTime);
-                        
                         let diff = pTime - d.progress;
-                        
-                        // Se o erro for muito grande (mais de 3s), dá o salto
-                        if (Math.abs(diff) > 3.0) {
-                            activePlayer.seekTo(d.progress, true);
-                            activePlayer.setPlaybackRate(1);
-                        } 
-                        // Ajuste fino: Se atrasar ou adiantar um pouco, muda a velocidade
-                        else if (diff > 0.6) activePlayer.setPlaybackRate(0.95); // Adiantado -> Desacelera
-                        else if (diff < -0.6) activePlayer.setPlaybackRate(1.05); // Atrasado -> Acelera
-                        else activePlayer.setPlaybackRate(1); // Perfeito -> Normal
-                        
+                        if (Math.abs(diff) > 3.0) activePlayer.seekTo(d.progress, true);
+                        else if (diff > 0.6) activePlayer.setPlaybackRate(0.95);
+                        else if (diff < -0.6) activePlayer.setPlaybackRate(1.05);
+                        else activePlayer.setPlaybackRate(1);
                     } else {
                         if (ytState === 1) activePlayer.pauseVideo();
                     }
                 }
                 
                 renderizarOuvintes(d.usuarios);
-            } catch(e) { console.error("Erro Sync:", e); }
+            } catch(e) { console.error("Sync Error"); }
         }
 
-        // --- UTILITÁRIOS ---
-        function formatTime(s) {
-            let m = Math.floor(s/60); let sec = Math.floor(s%60);
-            return `${m}:${sec.toString().padStart(2,'0')}`;
-        }
+        function renderizarOuvintes(usuarios) {
+            const pile = document.getElementById('pile'); pile.innerHTML = '';
+            const meuNome = localStorage.getItem('jam_name');
+            if(!usuarios) return;
 
-        function toggleVolume() {
-            const v = document.getElementById('volumePop');
-            v.style.display = 'flex'; resetVolumeTimer();
-        }
-
-        function resetVolumeTimer() {
-            clearTimeout(volTimer);
-            volTimer = setTimeout(() => { document.getElementById('volumePop').style.display = 'none'; }, 3000);
-        }
-
-        function toggleConfig() {
-            const m = document.getElementById('configModal');
-            m.style.display = m.style.display === 'flex' ? 'none' : 'flex';
+            usuarios.forEach(u => {
+                const souEu = (u.nome === meuNome);
+                const div = document.createElement('div');
+                div.className = `user-container ${souEu ? 'is-me' : ''}`;
+                div.innerHTML = `
+                    <div class="listener-avatar" style="background-image:url(${u.foto || 'https://www.gravatar.com/avatar/?d=mp'}); ${u.is_host ? 'border-color:#1DB954;' : ''}"></div>
+                    <div class="user-name-tag">${souEu ? 'VOCÊ' : u.nome}</div>
+                `;
+                pile.appendChild(div);
+            });
         }
 
         function saveProfile() {
@@ -314,18 +267,36 @@
             } else { toggleConfig(); }
         }
 
-        function checkSavedProfile() { if (!localStorage.getItem('jam_name')) toggleConfig(); }
-
-        function renderizarOuvintes(usuarios) {
-            const pile = document.getElementById('pile'); pile.innerHTML = '';
-            if(!usuarios) return;
-            usuarios.forEach(u => {
-                const div = document.createElement('div'); div.className = 'user-container';
-                div.innerHTML = `<div class="listener-avatar" style="background-image:url(${u.foto || 'https://www.gravatar.com/avatar/?d=mp'}); ${u.is_host ? 'border-color:#1DB954;' : ''}"></div>
-                                 <div class="user-name-tag">${u.nome}</div>`;
-                pile.appendChild(div);
+        async function sendCommand(cmd) {
+            await fetch(`${API_BASE}/command`, { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true'},
+                body: JSON.stringify({cmd: cmd}) 
             });
         }
+
+        function formatTime(s) {
+            let m = Math.floor(s/60); let sec = Math.floor(s%60);
+            return `${m}:${sec.toString().padStart(2,'0')}`;
+        }
+
+        function toggleVolume() {
+            const v = document.getElementById('volumePop');
+            v.style.display = v.style.display === 'flex' ? 'none' : 'flex';
+            resetVolumeTimer();
+        }
+
+        function resetVolumeTimer() {
+            clearTimeout(volTimer);
+            volTimer = setTimeout(() => { document.getElementById('volumePop').style.display = 'none'; }, 3000);
+        }
+
+        function toggleConfig() {
+            const m = document.getElementById('configModal');
+            m.style.display = m.style.display === 'flex' ? 'none' : 'flex';
+        }
+
+        function checkSavedProfile() { if (!localStorage.getItem('jam_name')) toggleConfig(); }
     </script>
 </body>
 </html>
