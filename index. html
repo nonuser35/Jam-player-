@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    </head>
+<body>
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script>
+        // MUDANÇA IMPORTANTE: Coloque aqui o seu link do túnel SSH
+        let api_url = "https://seu-link-aleatorio.lhr.life"; 
+
+        let p1, p2; 
+        let activePlayer = null;
+        let lastVidId = "";
+        let firstSync = true;
+        let currentLyrics = [];
+        let lastTrackInfo = "";
+
+        // ... (As funções onYouTubeIframeAPIReady e startSync continuam iguais) ...
+
+        async function syncComServidor() {
+            const nome = localStorage.getItem('jam_name');
+            const foto = localStorage.getItem('jam_pic') || "";
+            if(!nome) return;
+
+            try {
+                // AGORA BUSCAMOS NO SEU TÚNEL SSH (API_URL)
+                const res = await fetch(`${api_url}/status`, {
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ nome, foto: firstSync ? foto : "" })
+                });
+                const d = await res.json();
+                
+                // ... (O resto da lógica de Double Buffering e Velocidade continua igual) ...
+            } catch(e) { console.error("Erro ao conectar no seu PC:", e); }
+        }
+        // ... (O resto do JavaScript continua igual) ...
+    </script>
+</body>
+</html>
