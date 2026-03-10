@@ -67,7 +67,7 @@
         .btns button:hover { opacity: 1; transform: scale(1.1); }
         .play { font-size: 4rem !important; opacity: 1 !important; }
 
-        /* NOVO: Estilo do Spinner para o Play */
+        /* Estilo do Spinner */
         .fa-spinner.spinning { animation: spin-btn 1s linear infinite; font-size: 3rem !important; }
         @keyframes spin-btn { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
@@ -142,7 +142,10 @@
 
         let API_BASE = (linkVindoDoPython || localStorage.getItem('jam_api_url') || "").replace(/\/$/, "");
         let p1, p2, activePlayer, lastVid = "", firstSync = true, volTimer;
+        
+        // Timer de controle de interface
         let pausaManualTimer = 0;
+        let aguardandoPlayServidor = false; 
         
         let currentLyricsArray = [];
         let lastLyricsRaw = "";
@@ -230,6 +233,9 @@
                     const agora = Date.now();
 
                     if (d.is_playing) {
+                        // Se o servidor confirmou que está tocando, saímos do modo de espera
+                        aguardandoPlayServidor = false; 
+
                         if (agora > pausaManualTimer) {
                             document.getElementById('playIcon').innerHTML = '<i class="fas fa-pause-circle"></i>';
                             if (ytState !== 1 && ytState !== 3) activePlayer.playVideo();
@@ -246,8 +252,10 @@
                             }
                         }
                     } else {
-                        // Só volta para o ícone de Play se não estivermos no meio de um comando manual recente
-                        if (agora > pausaManualTimer) {
+                        // Se estamos aguardando o servidor mas ele ainda diz "pausado", mantemos o ícone de carregamento
+                        if (aguardandoPlayServidor) {
+                            document.getElementById('playIcon').innerHTML = '<i class="fas fa-spinner spinning"></i>';
+                        } else if (agora > pausaManualTimer) {
                             document.getElementById('playIcon').innerHTML = '<i class="fas fa-play-circle"></i>';
                             if (ytState === 1) activePlayer.pauseVideo();
                         }
@@ -289,20 +297,16 @@
             if (cmd === 'playpause' && activePlayer) {
                 const state = activePlayer.getPlayerState();
                 if (state === 1) { 
-                    // PAUSE
+                    // PAUSAR: Imediato
                     activePlayer.pauseVideo();
                     btn.innerHTML = '<i class="fas fa-play-circle"></i>';
                     pausaManualTimer = Date.now() + 3000; 
+                    aguardandoPlayServidor = false;
                 } else { 
-                    // PLAY (Efeito de carregamento visual)
+                    // DESPAUSAR: Primeiro mostramos carregamento, NÃO damos play no YT ainda
                     btn.innerHTML = '<i class="fas fa-spinner spinning"></i>';
-                    activePlayer.playVideo();
-                    pausaManualTimer = Date.now() + 3000; 
-
-                    // Após 1.5s, mostra o pause indicando que deu certo
-                    setTimeout(() => {
-                        if (pausaManualTimer > 0) btn.innerHTML = '<i class="fas fa-pause-circle"></i>';
-                    }, 1500);
+                    aguardandoPlayServidor = true; // Ativa o modo de espera pela info do Spotify
+                    pausaManualTimer = 0; // Permitimos que o servidor assuma o controle assim que der Play
                 }
             }
             fetch(`${API_BASE}/command`, { method: 'POST', mode: 'cors', headers: {'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true'}, body: JSON.stringify({cmd: cmd}) });
