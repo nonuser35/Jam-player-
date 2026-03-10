@@ -27,9 +27,10 @@
         /* FILA LATERAL */
         .queue-sidebar { position: fixed; left: 40px; top: 50%; transform: translateY(-50%); width: 220px; background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); border-radius: 25px; padding: 20px; border: 1px solid rgba(255,255,255,0.1); z-index: 10; }
         .queue-title { font-size: 0.65rem; font-weight: 800; color: #1DB954; letter-spacing: 3px; margin-bottom: 20px; text-align: center; }
-        .queue-item { display: flex; align-items: center; margin-bottom: 15px; gap: 12px; }
-        .queue-item img { width: 40px; height: 40px; border-radius: 6px; }
-        .queue-info p { margin: 0; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .queue-item { display: flex; align-items: center; margin-bottom: 15px; gap: 12px; max-width: 100%; }
+        .queue-item img { width: 40px; height: 40px; border-radius: 6px; flex-shrink: 0; }
+        .queue-info { overflow: hidden; }
+        .queue-info p { margin: 0; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 130px; }
         .queue-info .q-artist { color: rgba(255,255,255,0.5); font-size: 0.65rem; }
 
         /* OUVINTES */
@@ -58,8 +59,11 @@
         .controls-section { width: 100%; max-width: 700px; margin: 0 auto 50px auto; }
         .song-title { font-size: 2.2rem; font-weight: 800; margin: 0; text-align: center; letter-spacing: -1.5px; }
         .artist { font-size: 1.2rem; color: rgba(255, 255, 255, 0.5); margin-top: 5px; text-align: center; }
-        .lyrics-row { display: flex; align-items: center; justify-content: center; min-height: 60px; margin: 20px 0; }
-        #current-lyric-line { font-size: 1.4rem; font-weight: 700; text-align: center; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+        
+        /* LETRAS */
+        .lyrics-row { display: flex; align-items: center; justify-content: center; min-height: 80px; margin: 10px 0; }
+        #current-lyric-line { font-size: 1.6rem; font-weight: 700; text-align: center; color: #fff; text-shadow: 0 2px 15px rgba(0,0,0,0.8); transition: opacity 0.3s; }
+        
         .bar-bg { width: 100%; height: 5px; background: rgba(255,255,255,0.1); border-radius: 10px; cursor: pointer; }
         .bar-fill { width: 0%; height: 100%; background: #fff; border-radius: 10px; transition: width 0.3s linear; }
         .time-info { display: flex; justify-content: space-between; font-size: 0.8rem; color: rgba(255,255,255,0.4); margin-top: 8px; font-weight: 700; }
@@ -134,76 +138,44 @@
 
     <script src="https://www.youtube.com/iframe_api" async></script>
     <script>
-        // --- 1. CONFIGURAÇÃO DA API ---
         const urlParams = new URLSearchParams(window.location.search);
         const linkVindoDoPython = urlParams.get('api');
 
-        if (linkVindoDoPython) {
-            localStorage.setItem('jam_api_url', linkVindoDoPython);
-        }
+        if (linkVindoDoPython) { localStorage.setItem('jam_api_url', linkVindoDoPython); }
 
-        // Remove a barra final da URL para evitar erros de concatenação
         let API_BASE = (linkVindoDoPython || localStorage.getItem('jam_api_url') || "").replace(/\/$/, "");
-        
-        console.log("Conectado na API:", API_BASE);
-
         let p1, p2, activePlayer, lastVid = "", firstSync = true, volTimer;
+        
+        // --- VARIÁVEIS DE LETRA ---
+        let currentLyricsArray = [];
+        let lastLyricsRaw = "";
 
-        // --- 2. INICIALIZAÇÃO DO YOUTUBE (COM VACINA PARA postMessage) ---
         function onYouTubeIframeAPIReady() {
-            const cfg = { 
-                height: '1', 
-                width: '1', 
-                playerVars: {
-                    'controls': 0, 
-                    'disablekb': 1, 
-                    'enablejsapi': 1,
-                    'autoplay': 1,
-                    'mute': 1, // Começar mudo para garantir que o navegador permita o autoplay
-                    'origin': window.location.origin 
-                } 
-            };
+            const cfg = { height: '1', width: '1', playerVars: { 'controls': 0, 'disablekb': 1, 'enablejsapi': 1, 'autoplay': 1, 'mute': 1, 'origin': window.location.origin } };
             p1 = new YT.Player('player1', { ...cfg, events: { 'onReady': onPlayerReady } });
             p2 = new YT.Player('player2', { ...cfg, events: { 'onReady': onPlayerReady } });
         }
 
-        function onPlayerReady() {
-            if(p1 && p2 && p1.loadVideoById && p2.loadVideoById) {
-                console.log("Sistema de áudio pronto.");
-                initApp();
-            }
-        }
+        function onPlayerReady() { if(p1 && p2 && p1.loadVideoById && p2.loadVideoById) { initApp(); } }
 
         function initApp() {
-            // Intervalo de 1 segundo para maior estabilidade no Ngrok
             setInterval(syncComServidor, 1000);
             checkSavedProfile();
-            
             document.getElementById('volRange').addEventListener('input', (e) => {
                 const vol = e.target.value;
-                if(p1) p1.setVolume(vol);
-                if(p2) p2.setVolume(vol);
+                if(p1) p1.setVolume(vol); if(p2) p2.setVolume(vol);
                 resetVolumeTimer();
             });
         }
 
-        // --- 3. LÓGICA DE SINCRONIZAÇÃO ---
         async function syncComServidor() {
             if (!API_BASE) return;
-
-            const payload = { 
-                nome: localStorage.getItem('jam_name') || "Ouvinte", 
-                foto: firstSync ? (localStorage.getItem('jam_pic') || "") : "" 
-            };
+            const payload = { nome: localStorage.getItem('jam_name') || "Ouvinte", foto: firstSync ? (localStorage.getItem('jam_pic') || "") : "" };
 
             try {
                 const res = await fetch(`${API_BASE}/status`, {
-                    method: 'POST', 
-                    mode: 'cors', // Crucial para o Ngrok
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'ngrok-skip-browser-warning': 'true'
-                    },
+                    method: 'POST', mode: 'cors',
+                    headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
                     body: JSON.stringify(payload)
                 });
                 
@@ -211,11 +183,10 @@
                 if (!d) return;
                 firstSync = false;
 
-                // Atualização da Interface
+                // Interface Básica
                 document.getElementById('trackTitle').innerText = d.track_name || "Pausado";
                 document.getElementById('trackArtist').innerText = d.artist_name || "";
                 
-                // Correção contra o erro NaN
                 const prog = parseFloat(d.progress) || 0;
                 const dura = (parseFloat(d.duration) && d.duration > 0) ? d.duration : 1;
                 
@@ -238,29 +209,45 @@
                         </div>`).join('');
                 }
 
-                // --- DOUBLE BUFFERING (TROCA DE VÍDEO) ---
+                // --- LÓGICA DE LETRAS ---
+                if (d.lyrics && d.lyrics !== lastLyricsRaw) {
+                    lastLyricsRaw = d.lyrics;
+                    currentLyricsArray = d.lyrics.split('\n').map(line => {
+                        const match = line.match(/\[(\d+):(\d+\.\d+)\](.*)/);
+                        if (match) {
+                            const ms = (parseInt(match[1]) * 60 + parseFloat(match[2])) * 1000;
+                            return { time: ms, text: match[3].trim() };
+                        }
+                        return null;
+                    }).filter(item => item !== null);
+                }
+
+                if (currentLyricsArray.length > 0) {
+                    const spotifyMs = prog * 1000;
+                    const line = currentLyricsArray.reduce((prev, curr) => (curr.time <= spotifyMs) ? curr : prev, currentLyricsArray[0]);
+                    document.getElementById('current-lyric-line').innerText = line ? line.text : "";
+                } else {
+                    document.getElementById('current-lyric-line').innerText = "";
+                }
+
+                // --- DOUBLE BUFFERING ---
                 if (d.video_id && d.video_id !== lastVid) {
                     let next = (activePlayer === p1) ? p2 : p1;
-                    
                     next.loadVideoById(d.video_id, prog);
-                    next.unMute(); // Desmuta ao trocar
-                    
+                    next.unMute();
                     if(activePlayer) activePlayer.pauseVideo();
                     activePlayer = next;
                     lastVid = d.video_id;
                     activePlayer.setVolume(document.getElementById('volRange').value);
                 }
 
-                // --- AJUSTE DE SINCRONIA ---
+                // --- SINCRONIA ---
                 if (activePlayer && activePlayer.getPlayerState) {
                     const ytState = activePlayer.getPlayerState();
                     if (d.is_playing) {
                         if (ytState !== 1 && ytState !== 3) activePlayer.playVideo();
-                        
                         const pTime = activePlayer.getCurrentTime();
                         let diff = pTime - prog;
-                        
-                        // Se a diferença for grande, pula. Se for pequena, acelera/desacelera suavemente.
                         if (Math.abs(diff) > 2.5) {
                             activePlayer.seekTo(prog, true);
                         } else if (diff > 0.5) {
@@ -276,19 +263,12 @@
                 }
                 
                 if(d.usuarios) renderizarOuvintes(d.usuarios);
-
-            } catch(e) { 
-                console.log("Buscando servidor..."); 
-            }
+            } catch(e) { console.log("Erro na sync..."); }
         }
 
-        // --- 4. FUNÇÕES AUXILIARES ---
         function renderizarOuvintes(usuarios) {
-            const pile = document.getElementById('pile'); 
-            pile.innerHTML = '';
+            const pile = document.getElementById('pile'); pile.innerHTML = '';
             const meuNome = localStorage.getItem('jam_name');
-            if(!usuarios) return;
-
             usuarios.forEach(u => {
                 const souEu = (u.nome === meuNome);
                 const div = document.createElement('div');
@@ -307,33 +287,25 @@
             if(name) localStorage.setItem('jam_name', name);
             if(file) {
                 const r = new FileReader();
-                r.onload = (e) => { 
-                    localStorage.setItem('jam_pic', e.target.result); 
-                    firstSync = true; 
-                    toggleConfig(); 
-                };
+                r.onload = (e) => { localStorage.setItem('jam_pic', e.target.result); firstSync = true; toggleConfig(); };
                 r.readAsDataURL(file);
-            } else { 
-                toggleConfig(); 
-            }
+            } else { toggleConfig(); }
         }
 
         async function sendCommand(cmd) {
             if (!API_BASE) return;
             try {
                 await fetch(`${API_BASE}/command`, { 
-                    method: 'POST', 
-                    mode: 'cors',
+                    method: 'POST', mode: 'cors',
                     headers: {'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true'},
                     body: JSON.stringify({cmd: cmd}) 
                 });
-            } catch(e) { console.error("Erro ao enviar comando"); }
+            } catch(e) { console.error("Erro comando"); }
         }
 
         function formatTime(s) {
             if (!s || isNaN(s)) return "0:00";
-            let m = Math.floor(s/60); 
-            let sec = Math.floor(s%60);
+            let m = Math.floor(s/60); let sec = Math.floor(s%60);
             return `${m}:${sec.toString().padStart(2,'0')}`;
         }
 
@@ -345,9 +317,7 @@
 
         function resetVolumeTimer() {
             clearTimeout(volTimer);
-            volTimer = setTimeout(() => { 
-                document.getElementById('volumePop').style.display = 'none'; 
-            }, 4000);
+            volTimer = setTimeout(() => { document.getElementById('volumePop').style.display = 'none'; }, 4000);
         }
 
         function toggleConfig() {
@@ -355,9 +325,7 @@
             m.style.display = (m.style.display === 'flex') ? 'none' : 'flex';
         }
 
-        function checkSavedProfile() { 
-            if (!localStorage.getItem('jam_name')) toggleConfig(); 
-        }
+        function checkSavedProfile() { if (!localStorage.getItem('jam_name')) toggleConfig(); }
     </script>
 </body>
 </html>
