@@ -67,6 +67,10 @@
         .btns button:hover { opacity: 1; transform: scale(1.1); }
         .play { font-size: 4rem !important; opacity: 1 !important; }
 
+        /* NOVO: Estilo do Spinner para o Play */
+        .fa-spinner.spinning { animation: spin-btn 1s linear infinite; font-size: 3rem !important; }
+        @keyframes spin-btn { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
         .modal-config { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 100; display: none; align-items: center; justify-content: center; backdrop-filter: blur(20px); }
         .modal-box { background: #181818; padding: 40px; border-radius: 25px; width: 300px; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
         .modal-box input { width: 100%; background: #282828; border: 1px solid #333; padding: 12px; border-radius: 8px; color: #fff; margin-bottom: 15px; box-sizing: border-box; }
@@ -190,7 +194,6 @@
                 document.getElementById('mainArt').style.animationPlayState = d.is_playing ? 'running' : 'paused';
 
                 if (d.capa) {
-                    // AJUSTE: Corrigido uso de aspas nas URLs
                     document.getElementById('mainArt').style.backgroundImage = `url("${d.capa}")`;
                     document.getElementById('bgImg').style.backgroundImage = `url("${d.capa}")`;
                 }
@@ -226,7 +229,6 @@
                     const ytState = activePlayer.getPlayerState();
                     const agora = Date.now();
 
-                    // AJUSTE: Lógica de trava de pausa manual refinada
                     if (d.is_playing) {
                         if (agora > pausaManualTimer) {
                             document.getElementById('playIcon').innerHTML = '<i class="fas fa-pause-circle"></i>';
@@ -244,8 +246,11 @@
                             }
                         }
                     } else {
-                        document.getElementById('playIcon').innerHTML = '<i class="fas fa-play-circle"></i>';
-                        if (ytState === 1) activePlayer.pauseVideo();
+                        // Só volta para o ícone de Play se não estivermos no meio de um comando manual recente
+                        if (agora > pausaManualTimer) {
+                            document.getElementById('playIcon').innerHTML = '<i class="fas fa-play-circle"></i>';
+                            if (ytState === 1) activePlayer.pauseVideo();
+                        }
                     }
                 }
                 if(d.usuarios) renderizarOuvintes(d.usuarios);
@@ -279,17 +284,25 @@
 
         async function sendCommand(cmd) {
             if (!API_BASE) return;
+            const btn = document.getElementById('playIcon');
+
             if (cmd === 'playpause' && activePlayer) {
                 const state = activePlayer.getPlayerState();
                 if (state === 1) { 
+                    // PAUSE
                     activePlayer.pauseVideo();
-                    document.getElementById('playIcon').innerHTML = '<i class="fas fa-play-circle"></i>';
-                    // AJUSTE: Trava aumentada para 3 segundos para cobrir latência do servidor
+                    btn.innerHTML = '<i class="fas fa-play-circle"></i>';
                     pausaManualTimer = Date.now() + 3000; 
                 } else { 
+                    // PLAY (Efeito de carregamento visual)
+                    btn.innerHTML = '<i class="fas fa-spinner spinning"></i>';
                     activePlayer.playVideo();
-                    document.getElementById('playIcon').innerHTML = '<i class="fas fa-pause-circle"></i>';
-                    pausaManualTimer = 0;
+                    pausaManualTimer = Date.now() + 3000; 
+
+                    // Após 1.5s, mostra o pause indicando que deu certo
+                    setTimeout(() => {
+                        if (pausaManualTimer > 0) btn.innerHTML = '<i class="fas fa-pause-circle"></i>';
+                    }, 1500);
                 }
             }
             fetch(`${API_BASE}/command`, { method: 'POST', mode: 'cors', headers: {'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true'}, body: JSON.stringify({cmd: cmd}) });
