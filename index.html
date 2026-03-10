@@ -134,31 +134,35 @@
 
     <script src="https://www.youtube.com/iframe_api" async></script>
     <script>
-        // --- MACETE: CAPTURA AUTOMÁTICA DA API ---
         const urlParams = new URLSearchParams(window.location.search);
         const linkVindoDoPython = urlParams.get('api');
 
-        // Se o link veio na URL, a gente salva pra não perder
         if (linkVindoDoPython) {
             localStorage.setItem('jam_api_url', linkVindoDoPython);
         }
 
-        // Se não tiver link na URL, tenta pegar o último salvo. 
-        // Se nunca tiver usado, usa esse padrão antigo de backup.
-        const API_BASE = linkVindoDoPython || localStorage.getItem('jam_api_url') || "https://jagger-preelectric-densely.ngrok-free.dev";
+        const API_BASE = linkVindoDoPython || localStorage.getItem('jam_api_url');
         
         console.log("Conectado na API:", API_BASE);
-        // ------------------------------------------
 
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('sw.js').catch(() => {});
         }
 
         let p1, p2, activePlayer, lastVid = "", lastTrackId = "", firstSync = true, volTimer;
-        let currentLyrics = [];
 
         function onYouTubeIframeAPIReady() {
-            const cfg = { height: '1', width: '1', playerVars: {'controls': 0, 'disablekb': 1, 'origin': window.location.origin} };
+            // Ajuste na segurança da origem para evitar erro de postMessage
+            const cfg = { 
+                height: '1', 
+                width: '1', 
+                playerVars: {
+                    'controls': 0, 
+                    'disablekb': 1, 
+                    'enablejsapi': 1,
+                    'origin': window.location.origin 
+                } 
+            };
             p1 = new YT.Player('player1', { ...cfg, events: { 'onReady': () => { if(p2) initApp(); } } });
             p2 = new YT.Player('player2', { ...cfg, events: { 'onReady': () => { if(p1) initApp(); } } });
         }
@@ -173,6 +177,8 @@
         }
 
         async function syncComServidor() {
+            if (!API_BASE) return;
+
             const payload = { 
                 nome: localStorage.getItem('jam_name') || "Ouvinte", 
                 foto: firstSync ? (localStorage.getItem('jam_pic') || "") : "" 
@@ -181,7 +187,11 @@
             try {
                 const res = await fetch(`${API_BASE}/status`, {
                     method: 'POST', 
-                    headers: {'ngrok-skip-browser-warning': 'true', 'Content-Type': 'application/json'},
+                    headers: {
+                        'ngrok-skip-browser-warning': 'true', 
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
                     body: JSON.stringify(payload)
                 });
                 const d = await res.json();
@@ -193,8 +203,13 @@
 
                 document.getElementById('trackTitle').innerText = d.track_name || "Pausado";
                 document.getElementById('trackArtist').innerText = d.artist_name || "";
-                document.getElementById('progress').style.width = ((d.progress / d.duration) * 100) + "%";
-                document.getElementById('currTime').innerText = formatTime(d.progress);
+                
+                // Correção contra o erro NaN
+                const progresso = isNaN(d.progress) ? 0 : d.progress;
+                const duracao = isNaN(d.duration) || d.duration === 0 ? 1 : d.duration;
+                
+                document.getElementById('progress').style.width = ((progresso / duracao) * 100) + "%";
+                document.getElementById('currTime').innerText = formatTime(progresso);
                 document.getElementById('totalTime').innerText = formatTime(d.duration);
                 document.getElementById('playIcon').innerHTML = d.is_playing ? '<i class="fas fa-pause-circle"></i>' : '<i class="fas fa-play-circle"></i>';
                 document.getElementById('mainArt').style.animationPlayState = d.is_playing ? 'running' : 'paused';
@@ -214,7 +229,7 @@
 
                 if (d.video_id && d.video_id !== lastVid) {
                     let next = (activePlayer === p1) ? p2 : p1;
-                    next.loadVideoById(d.video_id, d.progress);
+                    next.loadVideoById(d.video_id, progresso);
                     if(activePlayer) activePlayer.pauseVideo();
                     activePlayer = next;
                     lastVid = d.video_id;
@@ -226,8 +241,8 @@
                     if (d.is_playing) {
                         if (ytState !== 1 && ytState !== 3) activePlayer.playVideo();
                         const pTime = activePlayer.getCurrentTime();
-                        let diff = pTime - d.progress;
-                        if (Math.abs(diff) > 3.0) activePlayer.seekTo(d.progress, true);
+                        let diff = pTime - progresso;
+                        if (Math.abs(diff) > 3.0) activePlayer.seekTo(progresso, true);
                         else if (diff > 0.6) activePlayer.setPlaybackRate(0.95);
                         else if (diff < -0.6) activePlayer.setPlaybackRate(1.05);
                         else activePlayer.setPlaybackRate(1);
@@ -237,7 +252,7 @@
                 }
                 
                 renderizarOuvintes(d.usuarios);
-            } catch(e) { console.error("Sync Error"); }
+            } catch(e) { console.error("Sync Error:", e); }
         }
 
         function renderizarOuvintes(usuarios) {
@@ -269,6 +284,7 @@
         }
 
         async function sendCommand(cmd) {
+            if (!API_BASE) return;
             await fetch(`${API_BASE}/command`, { 
                 method: 'POST', 
                 headers: {'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true'},
@@ -277,6 +293,7 @@
         }
 
         function formatTime(s) {
+            if (isNaN(s) || s === null || s === undefined) return "0:00";
             let m = Math.floor(s/60); let sec = Math.floor(s%60);
             return `${m}:${sec.toString().padStart(2,'0')}`;
         }
