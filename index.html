@@ -134,6 +134,7 @@
 
     <script src="https://www.youtube.com/iframe_api" async></script>
     <script>
+        // --- 1. CONFIGURAÇÃO DA API ---
         const urlParams = new URLSearchParams(window.location.search);
         const linkVindoDoPython = urlParams.get('api');
 
@@ -141,18 +142,15 @@
             localStorage.setItem('jam_api_url', linkVindoDoPython);
         }
 
-        const API_BASE = linkVindoDoPython || localStorage.getItem('jam_api_url');
+        // Remove a barra final da URL para evitar erros de concatenação
+        let API_BASE = (linkVindoDoPython || localStorage.getItem('jam_api_url') || "").replace(/\/$/, "");
         
         console.log("Conectado na API:", API_BASE);
 
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js').catch(() => {});
-        }
+        let p1, p2, activePlayer, lastVid = "", firstSync = true, volTimer;
 
-        let p1, p2, activePlayer, lastVid = "", lastTrackId = "", firstSync = true, volTimer;
-
+        // --- 2. INICIALIZAÇÃO DO YOUTUBE (COM VACINA PARA postMessage) ---
         function onYouTubeIframeAPIReady() {
-            // Ajuste na segurança da origem para evitar erro de postMessage
             const cfg = { 
                 height: '1', 
                 width: '1', 
@@ -160,22 +158,36 @@
                     'controls': 0, 
                     'disablekb': 1, 
                     'enablejsapi': 1,
+                    'autoplay': 1,
+                    'mute': 1, // Começar mudo para garantir que o navegador permita o autoplay
                     'origin': window.location.origin 
                 } 
             };
-            p1 = new YT.Player('player1', { ...cfg, events: { 'onReady': () => { if(p2) initApp(); } } });
-            p2 = new YT.Player('player2', { ...cfg, events: { 'onReady': () => { if(p1) initApp(); } } });
+            p1 = new YT.Player('player1', { ...cfg, events: { 'onReady': onPlayerReady } });
+            p2 = new YT.Player('player2', { ...cfg, events: { 'onReady': onPlayerReady } });
+        }
+
+        function onPlayerReady() {
+            if(p1 && p2 && p1.loadVideoById && p2.loadVideoById) {
+                console.log("Sistema de áudio pronto.");
+                initApp();
+            }
         }
 
         function initApp() {
-            setInterval(syncComServidor, 850);
+            // Intervalo de 1 segundo para maior estabilidade no Ngrok
+            setInterval(syncComServidor, 1000);
             checkSavedProfile();
+            
             document.getElementById('volRange').addEventListener('input', (e) => {
-                if(activePlayer) activePlayer.setVolume(e.target.value);
+                const vol = e.target.value;
+                if(p1) p1.setVolume(vol);
+                if(p2) p2.setVolume(vol);
                 resetVolumeTimer();
             });
         }
 
+        // --- 3. LÓGICA DE SINCRONIZAÇÃO ---
         async function syncComServidor() {
             if (!API_BASE) return;
 
@@ -187,29 +199,28 @@
             try {
                 const res = await fetch(`${API_BASE}/status`, {
                     method: 'POST', 
+                    mode: 'cors', // Crucial para o Ngrok
                     headers: {
-                        'ngrok-skip-browser-warning': 'true', 
                         'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
+                        'ngrok-skip-browser-warning': 'true'
                     },
                     body: JSON.stringify(payload)
                 });
+                
                 const d = await res.json();
+                if (!d) return;
                 firstSync = false;
 
-                if (d.user_spotify_pic && !localStorage.getItem('jam_pic')) {
-                    localStorage.setItem('jam_pic', d.user_spotify_pic);
-                }
-
+                // Atualização da Interface
                 document.getElementById('trackTitle').innerText = d.track_name || "Pausado";
                 document.getElementById('trackArtist').innerText = d.artist_name || "";
                 
                 // Correção contra o erro NaN
-                const progresso = isNaN(d.progress) ? 0 : d.progress;
-                const duracao = isNaN(d.duration) || d.duration === 0 ? 1 : d.duration;
+                const prog = parseFloat(d.progress) || 0;
+                const dura = (parseFloat(d.duration) && d.duration > 0) ? d.duration : 1;
                 
-                document.getElementById('progress').style.width = ((progresso / duracao) * 100) + "%";
-                document.getElementById('currTime').innerText = formatTime(progresso);
+                document.getElementById('progress').style.width = ((prog / dura) * 100) + "%";
+                document.getElementById('currTime').innerText = formatTime(prog);
                 document.getElementById('totalTime').innerText = formatTime(d.duration);
                 document.getElementById('playIcon').innerHTML = d.is_playing ? '<i class="fas fa-pause-circle"></i>' : '<i class="fas fa-play-circle"></i>';
                 document.getElementById('mainArt').style.animationPlayState = d.is_playing ? 'running' : 'paused';
@@ -227,36 +238,54 @@
                         </div>`).join('');
                 }
 
+                // --- DOUBLE BUFFERING (TROCA DE VÍDEO) ---
                 if (d.video_id && d.video_id !== lastVid) {
                     let next = (activePlayer === p1) ? p2 : p1;
-                    next.loadVideoById(d.video_id, progresso);
+                    
+                    next.loadVideoById(d.video_id, prog);
+                    next.unMute(); // Desmuta ao trocar
+                    
                     if(activePlayer) activePlayer.pauseVideo();
                     activePlayer = next;
                     lastVid = d.video_id;
                     activePlayer.setVolume(document.getElementById('volRange').value);
                 }
 
+                // --- AJUSTE DE SINCRONIA ---
                 if (activePlayer && activePlayer.getPlayerState) {
                     const ytState = activePlayer.getPlayerState();
                     if (d.is_playing) {
                         if (ytState !== 1 && ytState !== 3) activePlayer.playVideo();
+                        
                         const pTime = activePlayer.getCurrentTime();
-                        let diff = pTime - progresso;
-                        if (Math.abs(diff) > 3.0) activePlayer.seekTo(progresso, true);
-                        else if (diff > 0.6) activePlayer.setPlaybackRate(0.95);
-                        else if (diff < -0.6) activePlayer.setPlaybackRate(1.05);
-                        else activePlayer.setPlaybackRate(1);
+                        let diff = pTime - prog;
+                        
+                        // Se a diferença for grande, pula. Se for pequena, acelera/desacelera suavemente.
+                        if (Math.abs(diff) > 2.5) {
+                            activePlayer.seekTo(prog, true);
+                        } else if (diff > 0.5) {
+                            activePlayer.setPlaybackRate(0.95);
+                        } else if (diff < -0.5) {
+                            activePlayer.setPlaybackRate(1.05);
+                        } else {
+                            activePlayer.setPlaybackRate(1);
+                        }
                     } else {
                         if (ytState === 1) activePlayer.pauseVideo();
                     }
                 }
                 
-                renderizarOuvintes(d.usuarios);
-            } catch(e) { console.error("Sync Error:", e); }
+                if(d.usuarios) renderizarOuvintes(d.usuarios);
+
+            } catch(e) { 
+                console.log("Buscando servidor..."); 
+            }
         }
 
+        // --- 4. FUNÇÕES AUXILIARES ---
         function renderizarOuvintes(usuarios) {
-            const pile = document.getElementById('pile'); pile.innerHTML = '';
+            const pile = document.getElementById('pile'); 
+            pile.innerHTML = '';
             const meuNome = localStorage.getItem('jam_name');
             if(!usuarios) return;
 
@@ -278,43 +307,57 @@
             if(name) localStorage.setItem('jam_name', name);
             if(file) {
                 const r = new FileReader();
-                r.onload = (e) => { localStorage.setItem('jam_pic', e.target.result); firstSync = true; toggleConfig(); };
+                r.onload = (e) => { 
+                    localStorage.setItem('jam_pic', e.target.result); 
+                    firstSync = true; 
+                    toggleConfig(); 
+                };
                 r.readAsDataURL(file);
-            } else { toggleConfig(); }
+            } else { 
+                toggleConfig(); 
+            }
         }
 
         async function sendCommand(cmd) {
             if (!API_BASE) return;
-            await fetch(`${API_BASE}/command`, { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true'},
-                body: JSON.stringify({cmd: cmd}) 
-            });
+            try {
+                await fetch(`${API_BASE}/command`, { 
+                    method: 'POST', 
+                    mode: 'cors',
+                    headers: {'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true'},
+                    body: JSON.stringify({cmd: cmd}) 
+                });
+            } catch(e) { console.error("Erro ao enviar comando"); }
         }
 
         function formatTime(s) {
-            if (isNaN(s) || s === null || s === undefined) return "0:00";
-            let m = Math.floor(s/60); let sec = Math.floor(s%60);
+            if (!s || isNaN(s)) return "0:00";
+            let m = Math.floor(s/60); 
+            let sec = Math.floor(s%60);
             return `${m}:${sec.toString().padStart(2,'0')}`;
         }
 
         function toggleVolume() {
             const v = document.getElementById('volumePop');
-            v.style.display = v.style.display === 'flex' ? 'none' : 'flex';
+            v.style.display = (v.style.display === 'flex') ? 'none' : 'flex';
             resetVolumeTimer();
         }
 
         function resetVolumeTimer() {
             clearTimeout(volTimer);
-            volTimer = setTimeout(() => { document.getElementById('volumePop').style.display = 'none'; }, 3000);
+            volTimer = setTimeout(() => { 
+                document.getElementById('volumePop').style.display = 'none'; 
+            }, 4000);
         }
 
         function toggleConfig() {
             const m = document.getElementById('configModal');
-            m.style.display = m.style.display === 'flex' ? 'none' : 'flex';
+            m.style.display = (m.style.display === 'flex') ? 'none' : 'flex';
         }
 
-        function checkSavedProfile() { if (!localStorage.getItem('jam_name')) toggleConfig(); }
+        function checkSavedProfile() { 
+            if (!localStorage.getItem('jam_name')) toggleConfig(); 
+        }
     </script>
 </body>
 </html>
