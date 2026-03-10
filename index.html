@@ -1,6 +1,441 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jam Sync Player | Ultra Sync</title>
+
+<link rel="preconnect" href="https://www.youtube.com">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700;800&display=swap" rel="stylesheet">
+
+<style>
+
+body,html{
+margin:0;
+padding:0;
+width:100%;
+height:100%;
+background:#000;
+overflow:hidden;
+color:white;
+font-family:'Montserrat',sans-serif
+}
+
+.bg-container{
+position:fixed;
+top:0;
+left:0;
+width:100%;
+height:100%;
+z-index:1;
+overflow:hidden
+}
+
+.bg-image{
+position:absolute;
+top:-10%;
+left:-10%;
+width:120%;
+height:120%;
+background-size:cover;
+background-position:center;
+transition:background-image 1.2s ease-in-out;
+filter:blur(3px) brightness(0.4);
+animation:backgroundMove 60s infinite alternate
+}
+
+@keyframes backgroundMove{
+0%{transform:scale(1)}
+100%{transform:scale(1.15)}
+}
+
+.glass-overlay{
+position:fixed;
+top:0;
+left:0;
+width:100%;
+height:100%;
+background:rgba(0,0,0,0.3);
+z-index:2
+}
+
+.container{
+position:relative;
+display:flex;
+flex-direction:column;
+height:100vh;
+padding:40px;
+justify-content:space-between;
+z-index:3;
+box-sizing:border-box;
+max-width:1200px;
+margin:0 auto
+}
+
+/* FILA */
+
+.queue-sidebar{
+position:fixed;
+left:40px;
+top:50%;
+transform:translateY(-50%);
+width:260px;
+background:rgba(255,255,255,0.05);
+backdrop-filter:blur(20px);
+border-radius:25px;
+padding:25px;
+border:1px solid rgba(255,255,255,0.1);
+z-index:10;
+max-height:70vh;
+overflow-y:auto
+}
+
+.queue-title{
+font-size:0.95rem;
+font-weight:800;
+color:#1DB954;
+letter-spacing:3px;
+margin-bottom:25px;
+text-align:center
+}
+
+.queue-item{
+display:flex;
+align-items:center;
+margin-bottom:20px;
+gap:14px
+}
+
+.queue-item img{
+width:52px;
+height:52px;
+border-radius:8px;
+flex-shrink:0;
+object-fit:cover
+}
+
+.queue-info{
+overflow:hidden
+}
+
+.queue-info p{
+margin:0;
+font-size:1rem;
+white-space:nowrap;
+overflow:hidden;
+text-overflow:ellipsis;
+width:160px;
+font-weight:600
+}
+
+.queue-info .q-artist{
+color:rgba(255,255,255,0.5);
+font-size:0.85rem;
+font-weight:400;
+margin-top:3px
+}
+
+/* OUVINTES */
+
+.top-right-bar{
+position:absolute;
+top:40px;
+right:40px;
+z-index:5
+}
+
+.listeners-pile{
+display:flex;
+flex-direction:row-reverse;
+gap:5px
+}
+
+.user-container{
+position:relative;
+display:flex;
+flex-direction:column;
+align-items:center;
+margin-left:-12px;
+transition:0.3s;
+cursor:pointer
+}
+
+.listener-avatar{
+width:48px;
+height:48px;
+border-radius:50%;
+background-size:cover;
+border:3px solid #000;
+background-position:center;
+box-shadow:-5px 0 15px rgba(0,0,0,0.5);
+z-index:1
+}
+
+.user-name-tag{
+position:absolute;
+top:-35px;
+left:50%;
+transform:translateX(-50%) translateY(10px);
+opacity:0;
+transition:0.3s;
+pointer-events:none;
+background:#1DB954;
+color:#000;
+font-size:0.6rem;
+font-weight:800;
+padding:4px 10px;
+border-radius:6px;
+white-space:nowrap;
+z-index:10
+}
+
+.user-container:hover .user-name-tag{
+opacity:1;
+transform:translateX(-50%) translateY(0)
+}
+
+.user-container:hover{
+margin-left:5px;
+margin-right:5px
+}
+
+.user-container.is-me .listener-avatar{
+border-color:#fff
+}
+
+.user-container.is-me .user-name-tag{
+opacity:1;
+transform:translateX(-50%) translateY(0);
+background:#fff
+}
+
+/* PLAYER */
+
+.art-section{
+flex-grow:1;
+display:flex;
+align-items:center;
+justify-content:center
+}
+
+.circle-art{
+width:320px;
+height:320px;
+border-radius:50%;
+background-size:cover;
+background-position:center;
+box-shadow:0 30px 100px rgba(0,0,0,0.8);
+border:2px solid rgba(255,255,255,0.1);
+animation:spin 40s linear infinite;
+animation-play-state:paused;
+transition:0.8s
+}
+
+@keyframes spin{
+from{transform:rotate(0deg)}
+to{transform:rotate(360deg)}
+}
+
+.yt-hidden{
+position:absolute;
+width:1px;
+height:1px;
+opacity:0;
+pointer-events:none
+}
+
+/* CONTROLES */
+
+.controls-section{
+width:100%;
+max-width:700px;
+margin:0 auto 50px auto
+}
+
+.song-title{
+font-size:2.2rem;
+font-weight:800;
+margin:0;
+text-align:center;
+letter-spacing:-1.5px
+}
+
+.artist{
+font-size:1.2rem;
+color:rgba(255,255,255,0.5);
+margin-top:5px;
+text-align:center
+}
+
+.bar-bg{
+width:100%;
+height:5px;
+background:rgba(255,255,255,0.1);
+border-radius:10px;
+cursor:pointer
+}
+
+.bar-fill{
+width:0%;
+height:100%;
+background:#fff;
+border-radius:10px;
+transition:width 0.3s linear
+}
+
+.time-info{
+display:flex;
+justify-content:space-between;
+font-size:0.8rem;
+color:rgba(255,255,255,0.4);
+margin-top:8px;
+font-weight:700
+}
+
+.btns{
+display:flex;
+justify-content:center;
+gap:30px;
+align-items:center;
+margin-top:25px
+}
+
+.btns button{
+font-size:1.5rem;
+opacity:0.6;
+transition:0.3s;
+color:white;
+background:none;
+border:none;
+cursor:pointer
+}
+
+.btns button:hover{
+opacity:1;
+transform:scale(1.1)
+}
+
+.play{
+font-size:4rem !important;
+opacity:1 !important
+}
+
+</style>
+</head>
+
+<body>
+
+<div id="player1" class="yt-hidden"></div>
+<div id="player2" class="yt-hidden"></div>
+
+<div class="bg-container">
+<div class="bg-image" id="bgImg"></div>
+</div>
+
+<div class="glass-overlay"></div>
+
+<div class="queue-sidebar">
+<p class="queue-title">PRÓXIMAS</p>
+<div id="queueItems"></div>
+</div>
+
+<div class="container">
+
+<div class="top-right-bar">
+<div class="listeners-pile" id="pile"></div>
+</div>
+
+<div class="art-section">
+<div class="circle-art" id="mainArt"></div>
+</div>
+
+<div class="controls-section">
+
+<p class="song-title" id="trackTitle">Sincronizando...</p>
+<p class="artist" id="trackArtist">Aguarde o Host</p>
+
+<div class="bar-bg">
+<div class="bar-fill" id="progress"></div>
+</div>
+
+<div class="time-info">
+<span id="currTime">0:00</span>
+<span id="totalTime">0:00</span>
+</div>
+
+<div class="btns">
+<button onclick="sendCommand('prev')"><i class="fas fa-step-backward"></i></button>
+<button class="play" id="playIcon" onclick="sendCommand('playpause')"><i class="fas fa-pause-circle"></i></button>
+<button onclick="sendCommand('next')"><i class="fas fa-step-forward"></i></button>
+</div>
+
+</div>
+</div>
+
+<script src="https://www.youtube.com/iframe_api"></script>
+
+<script>
+
+let p1,p2,activePlayer,lastVid=""
+let pausaManualTimer=0
+
+function onYouTubeIframeAPIReady(){
+
+const cfg={
+height:'1',
+width:'1',
+playerVars:{
+controls:0,
+disablekb:1,
+enablejsapi:1,
+autoplay:1
+}
+}
+
+p1=new YT.Player('player1',{...cfg})
+p2=new YT.Player('player2',{...cfg})
+
+}
+
+async function sendCommand(cmd){
+
+if(cmd==="playpause" && activePlayer){
+
+const state=activePlayer.getPlayerState()
+
+if(state===1){
+
+activePlayer.pauseVideo()
+document.getElementById('playIcon').innerHTML='<i class="fas fa-play-circle"></i>'
+
+pausaManualTimer=Date.now()+3000
+
+}else{
+
+activePlayer.playVideo()
+document.getElementById('playIcon').innerHTML='<i class="fas fa-pause-circle"></i>'
+
+pausaManualTimer=0
+
+}
+
+}
+
+fetch(`/command`,{
+method:"POST",
+headers:{'Content-Type':'application/json'},
+body:JSON.stringify({cmd:cmd})
+})
+
+}
+
+</script>
+
+</body>
+</html><!DOCTYPE html>
+<html lang="pt-BR">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jam Sync Player | Ultra Sync</title>
