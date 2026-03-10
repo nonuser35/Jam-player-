@@ -146,6 +146,366 @@
         let API_BASE = (linkVindoDoPython || localStorage.getItem('jam_api_url') || "").replace(/\/$/, "");
         let p1, p2, activePlayer, lastVid = "", firstSync = true, volTimer;
         
+        let currentLyricsArray = [];
+        let lastLyricsRaw = "";
+        let lastLyricText = "";
+
+        function onYouTubeIframeAPIReady() {
+            const cfg = { height: '1', width: '1', playerVars: { 'controls': 0, 'disablekb': 1, 'enablejsapi': 1, 'autoplay': 1, 'mute': 1, 'origin': window.location.origin } };
+            p1 = new YT.Player('player1', { ...cfg, events: { 'onReady': onPlayerReady } });
+            p2 = new YT.Player('player2', { ...cfg, events: { 'onReady': onPlayerReady } });
+        }
+
+        function onPlayerReady() { if(p1 && p2 && p1.loadVideoById && p2.loadVideoById) { initApp(); } }
+
+        function initApp() {
+            setInterval(syncComServidor, 1000); // Sincronia de estado geral
+            setInterval(updateLyricsRealTime, 100); // Sincronia de letra ultra fluida
+            
+            checkSavedProfile();
+            document.getElementById('volRange').addEventListener('input', (e) => {
+                const vol = e.target.value;
+                if(p1) p1.setVolume(vol); if(p2) p2.setVolume(vol);
+                resetVolumeTimer();
+            });
+        }
+
+        async function syncComServidor() {
+            if (!API_BASE) return;
+            const payload = { nome: localStorage.getItem('jam_name') || "Ouvinte", foto: firstSync ? (localStorage.getItem('jam_pic') || "") : "" };
+
+            try {
+                const res = await fetch(`${API_BASE}/status`, {
+                    method: 'POST', mode: 'cors',
+                    headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const d = await res.json();
+                if (!d) return;
+                firstSync = false;
+
+                document.getElementById('trackTitle').innerText = d.track_name || "Pausado";
+                document.getElementById('trackArtist').innerText = d.artist_name || "";
+                
+                const prog = parseFloat(d.progress) || 0;
+                const dura = (parseFloat(d.duration) && d.duration > 0) ? d.duration : 1;
+                
+                document.getElementById('progress').style.width = ((prog / dura) * 100) + "%";
+                document.getElementById('currTime').innerText = formatTime(prog);
+                document.getElementById('totalTime').innerText = formatTime(d.duration);
+                document.getElementById('playIcon').innerHTML = d.is_playing ? '<i class="fas fa-pause-circle"></i>' : '<i class="fas fa-play-circle"></i>';
+                document.getElementById('mainArt').style.animationPlayState = d.is_playing ? 'running' : 'paused';
+
+                if (d.capa) {
+                    document.getElementById('mainArt').style.backgroundImage = `url(${d.capa})`;
+                    document.getElementById('bgImg').style.backgroundImage = `url(${d.capa})`;
+                }
+
+                if (d.fila) {
+                    document.getElementById('queueItems').innerHTML = d.fila.map(m => `
+                        <div class="queue-item">
+                            <img src="${m.capa}">
+                            <div class="queue-info"><p><b>${m.name}</b></p><p class="q-artist">${m.artist}</p></div>
+                        </div>`).join('');
+                }
+
+                if (d.lyrics && d.lyrics !== lastLyricsRaw) {
+                    lastLyricsRaw = d.lyrics;
+                    currentLyricsArray = d.lyrics.split('\n').map(line => {
+                        const match = line.match(/\[(\d+):(\d+\.\d+)\](.*)/);
+                        if (match) {
+                            const ms = (parseInt(match[1]) * 60 + parseFloat(match[2])) * 1000;
+                            return { time: ms, text: match[3].trim() };
+                        }
+                        return null;
+                    }).filter(item => item !== null);
+                } else if (!d.lyrics) {
+                    currentLyricsArray = [];
+                    lastLyricsRaw = "";
+                }
+
+                if (d.video_id && d.video_id !== lastVid) {
+                    let next = (activePlayer === p1) ? p2 : p1;
+                    next.loadVideoById(d.video_id, prog);
+                    next.unMute();
+                    if(activePlayer) activePlayer.pauseVideo();
+                    activePlayer = next;
+                    lastVid = d.video_id;
+                    activePlayer.setVolume(document.getElementById('volRange').value);
+                }
+
+                if (activePlayer && activePlayer.getPlayerState) {
+                    const ytState = activePlayer.getPlayerState();
+                    if (d.is_playing) {
+                        if (ytState !== 1 && ytState !== 3) activePlayer.playVideo();
+                        const pTime = activePlayer.getCurrentTime();
+                        let diff = pTime - prog;
+                        if (Math.abs(diff) > 2.5) {
+                            activePlayer.seekTo(prog, true);
+                        } else if (diff > 0.5) {
+                            activePlayer.setPlaybackRate(0.95);
+                        } else if (diff < -0.5) {
+                            activePlayer.setPlaybackRate(1.05);
+                        } else {
+                            activePlayer.setPlaybackRate(1);
+                        }
+                    } else {
+                        if (ytState === 1) activePlayer.pauseVideo();
+                    }
+                }
+                
+                if(d.usuarios) renderizarOuvintes(d.usuarios);
+            } catch(e) { console.log("Erro na sync..."); }
+        }
+
+        function updateLyricsRealTime() {
+            if (currentLyricsArray.length > 0 && activePlayer && activePlayer.getCurrentTime) {
+                const currentTimeMs = activePlayer.getCurrentTime() * 1000;
+                const line = currentLyricsArray.reduce((prev, curr) => 
+                    (curr.time <= currentTimeMs) ? curr : prev, currentLyricsArray[0]
+                );
+
+                const display = document.getElementById('current-lyric-line');
+                if (line && line.text !== lastLyricText) {
+                    lastLyricText = line.text;
+                    display.style.opacity = 0;
+                    setTimeout(() => {
+                        display.textContent = line.text;
+                        display.style.opacity = 1;
+                    }, 150);
+                }
+            } else if (currentLyricsArray.length === 0) {
+                document.getElementById('current-lyric-line').textContent = "";
+                lastLyricText = "";
+            }
+        }
+
+        function renderizarOuvintes(usuarios) {
+            const pile = document.getElementById('pile'); pile.innerHTML = '';
+            const meuNome = localStorage.getItem('jam_name');
+            usuarios.forEach(u => {
+                const souEu = (u.nome === meuNome);
+                const div = document.createElement('div');
+                div.className = `user-container ${souEu ? 'is-me' : ''}`;
+                div.innerHTML = `
+                    <div class="listener-avatar" style="background-image:url(${u.foto || 'https://www.gravatar.com/avatar/?d=mp'}); ${u.is_host ? 'border-color:#1DB954;' : ''}"></div>
+                    <div class="user-name-tag">${souEu ? 'VOCÊ' : u.nome}</div>
+                `;
+                pile.appendChild(div);
+            });
+        }
+
+        function saveProfile() {
+            const name = document.getElementById('inputName').value;
+            const file = document.getElementById('inputFile').files[0];
+            if(name) localStorage.setItem('jam_name', name);
+            if(file) {
+                const r = new FileReader();
+                r.onload = (e) => { localStorage.setItem('jam_pic', e.target.result); firstSync = true; toggleConfig(); };
+                r.readAsDataURL(file);
+            } else { toggleConfig(); }
+        }
+
+        async function sendCommand(cmd) {
+            if (!API_BASE) return;
+            
+            // FEEDBACK VISUAL E SONORO INSTANTÂNEO (Apenas para Play/Pause)
+            if (cmd === 'playpause' && activePlayer) {
+                const state = activePlayer.getPlayerState();
+                const icon = document.getElementById('playIcon');
+                
+                if (state === 1) { // Está tocando, pausa na hora
+                    activePlayer.pauseVideo();
+                    icon.innerHTML = '<i class="fas fa-play-circle"></i>';
+                } else { // Está pausado, dá play na hora
+                    activePlayer.playVideo();
+                    icon.innerHTML = '<i class="fas fa-pause-circle"></i>';
+                }
+            }
+
+            try {
+                fetch(`${API_BASE}/command`, { 
+                    method: 'POST', mode: 'cors',
+                    headers: {'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true'},
+                    body: JSON.stringify({cmd: cmd}) 
+                });
+            } catch(e) { console.error("Erro comando"); }
+        }
+
+        function formatTime(s) {
+            if (!s || isNaN(s)) return "0:00";
+            let m = Math.floor(s/60); let sec = Math.floor(s%60);
+            return `${m}:${sec.toString().padStart(2,'0')}`;
+        }
+
+        function toggleVolume() {
+            const v = document.getElementById('volumePop');
+            v.style.display = (v.style.display === 'flex') ? 'none' : 'flex';
+            resetVolumeTimer();
+        }
+
+        function resetVolumeTimer() {
+            clearTimeout(volTimer);
+            volTimer = setTimeout(() => { document.getElementById('volumePop').style.display = 'none'; }, 4000);
+        }
+
+        function toggleConfig() {
+            const m = document.getElementById('configModal');
+            m.style.display = (m.style.display === 'flex') ? 'none' : 'flex';
+        }
+
+        function checkSavedProfile() { if (!localStorage.getItem('jam_name')) toggleConfig(); }
+    </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jam Sync Player | Ultra Sync</title>
+    
+    <link rel="preconnect" href="https://www.youtube.com">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #000; overflow: hidden; color: white; font-family: 'Montserrat', sans-serif; }
+        .bg-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; overflow: hidden; }
+        .bg-image { 
+            position: absolute; top: -10%; left: -10%; width: 120%; height: 120%; 
+            background-size: cover; background-position: center; 
+            transition: background-image 1.2s ease-in-out; 
+            filter: blur(3px) brightness(0.4); 
+            animation: backgroundMove 60s infinite alternate; 
+        }
+        @keyframes backgroundMove { 0% { transform: scale(1); } 100% { transform: scale(1.15); } }
+        .glass-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.3); z-index: 2; }
+        
+        .container { position: relative; display: flex; flex-direction: column; height: 100vh; padding: 40px; justify-content: space-between; z-index: 3; box-sizing: border-box; max-width: 1200px; margin: 0 auto; }
+        
+        /* FILA LATERAL */
+        .queue-sidebar { position: fixed; left: 40px; top: 50%; transform: translateY(-50%); width: 220px; background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); border-radius: 25px; padding: 20px; border: 1px solid rgba(255,255,255,0.1); z-index: 10; }
+        .queue-title { font-size: 0.65rem; font-weight: 800; color: #1DB954; letter-spacing: 3px; margin-bottom: 20px; text-align: center; }
+        .queue-item { display: flex; align-items: center; margin-bottom: 15px; gap: 12px; max-width: 100%; }
+        .queue-item img { width: 40px; height: 40px; border-radius: 6px; flex-shrink: 0; }
+        .queue-info { overflow: hidden; }
+        .queue-info p { margin: 0; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 130px; }
+        .queue-info .q-artist { color: rgba(255,255,255,0.5); font-size: 0.65rem; }
+
+        /* OUVINTES */
+        .top-right-bar { position: absolute; top: 40px; right: 40px; z-index: 5; } 
+        .listeners-pile { display: flex; flex-direction: row-reverse; gap: 5px; }
+        .user-container { position: relative; display: flex; flex-direction: column; align-items: center; margin-left: -12px; transition: 0.3s; cursor: pointer; }
+        .listener-avatar { width: 48px; height: 48px; border-radius: 50%; background-size: cover; border: 3px solid #000; background-position: center; box-shadow: -5px 0 15px rgba(0,0,0,0.5); z-index: 1; }
+        .user-name-tag { 
+            position: absolute; top: -35px; left: 50%; transform: translateX(-50%) translateY(10px);
+            opacity: 0; transition: 0.3s; pointer-events: none;
+            background: #1DB954; color: #000; font-size: 0.6rem; font-weight: 800;
+            padding: 4px 10px; border-radius: 6px; white-space: nowrap; z-index: 10;
+        }
+        .user-container:hover .user-name-tag { opacity: 1; transform: translateX(-50%) translateY(0); }
+        .user-container:hover { margin-left: 5px; margin-right: 5px; }
+        .user-container.is-me .listener-avatar { border-color: #fff; }
+        .user-container.is-me .user-name-tag { opacity: 1; transform: translateX(-50%) translateY(0); background: #fff; }
+
+        /* PLAYER VISUAL */
+        .art-section { flex-grow: 1; display: flex; align-items: center; justify-content: center; }
+        .circle-art { width: 320px; height: 320px; border-radius: 50%; background-size: cover; background-position: center; box-shadow: 0 30px 100px rgba(0,0,0,0.8); border: 2px solid rgba(255,255,255,0.1); animation: spin 40s linear infinite; animation-play-state: paused; transition: 0.8s; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .yt-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+        
+        /* CONTROLES */
+        .controls-section { width: 100%; max-width: 700px; margin: 0 auto 50px auto; }
+        .song-title { font-size: 2.2rem; font-weight: 800; margin: 0; text-align: center; letter-spacing: -1.5px; }
+        .artist { font-size: 1.2rem; color: rgba(255, 255, 255, 0.5); margin-top: 5px; text-align: center; }
+        
+        /* LETRAS */
+        .lyrics-row { display: flex; align-items: center; justify-content: center; min-height: 80px; margin: 10px 0; }
+        #current-lyric-line { font-size: 1.6rem; font-weight: 700; text-align: center; color: #fff; text-shadow: 0 2px 15px rgba(0,0,0,0.8); transition: opacity 0.2s ease; opacity: 1; }
+        
+        .bar-bg { width: 100%; height: 5px; background: rgba(255,255,255,0.1); border-radius: 10px; cursor: pointer; }
+        .bar-fill { width: 0%; height: 100%; background: #fff; border-radius: 10px; transition: width 0.3s linear; }
+        .time-info { display: flex; justify-content: space-between; font-size: 0.8rem; color: rgba(255,255,255,0.4); margin-top: 8px; font-weight: 700; }
+        .btns { display: flex; justify-content: center; gap: 30px; align-items: center; margin-top: 25px; }
+        .btns button { font-size: 1.5rem; opacity: 0.6; transition: 0.3s; color: white; background: none; border: none; cursor: pointer; }
+        .btns button:hover { opacity: 1; transform: scale(1.1); }
+        .play { font-size: 4rem !important; opacity: 1 !important; }
+
+        /* MODAL */
+        .modal-config { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 100; display: none; align-items: center; justify-content: center; backdrop-filter: blur(20px); }
+        .modal-box { background: #181818; padding: 40px; border-radius: 25px; width: 300px; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
+        .modal-box input { width: 100%; background: #282828; border: 1px solid #333; padding: 12px; border-radius: 8px; color: #fff; margin-bottom: 15px; box-sizing: border-box; }
+        .btn-main { background: #1DB954; color: #000; padding: 12px; width: 100%; border-radius: 8px; font-weight: 800; cursor: pointer; border: none; }
+        
+        .volume-popover { position: absolute; bottom: 40px; right: 110px; width: 160px; height: 50px; background: rgba(255,255,255,0.1); backdrop-filter: blur(20px); border-radius: 30px; display: none; align-items: center; justify-content: center; z-index: 20; padding: 0 20px; border: 1px solid rgba(255,255,255,0.1); }
+        .volume-popover input { width: 100%; cursor: pointer; accent-color: #1DB954; }
+        .footer-tools { position: absolute; bottom: 40px; left: 40px; right: 40px; display: flex; justify-content: space-between; z-index: 10; }
+        .tool-btn { width: 45px; height: 45px; border-radius: 50%; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.3s; }
+        .tool-btn:hover { background: #1DB954; color: #000; }
+    </style>
+</head>
+<body>
+    <div id="player1" class="yt-hidden"></div>
+    <div id="player2" class="yt-hidden"></div>
+
+    <div class="bg-container"><div class="bg-image" id="bgImg"></div></div>
+    <div class="glass-overlay"></div>
+    
+    <div class="queue-sidebar" id="queueList">
+        <p class="queue-title">PRÓXIMAS</p>
+        <div id="queueItems"></div>
+    </div>
+
+    <div class="modal-config" id="configModal">
+        <div class="modal-box">
+            <p style="font-size: 0.7rem; letter-spacing: 2px; font-weight: 800; color: #1DB954; margin-bottom: 20px;">ENTRAR NA JAM</p>
+            <input type="text" id="inputName" placeholder="Seu apelido">
+            <label style="display:block; background:rgba(255,255,255,0.05); padding:12px; border-radius:8px; font-size:0.8rem; cursor:pointer; border:1px dashed #444; margin-bottom:15px;">
+                <i class="fas fa-camera"></i> Foto (Opcional)
+                <input type="file" id="inputFile" accept="image/*" style="display: none;">
+            </label>
+            <button class="btn-main" onclick="saveProfile()">Conectar</button>
+        </div>
+    </div>
+
+    <div class="volume-popover" id="volumePop"><input type="range" min="0" max="100" value="70" id="volRange"></div>
+
+    <div class="container">
+        <div class="top-right-bar"><div class="listeners-pile" id="pile"></div></div>
+        <div class="art-section"><div class="circle-art" id="mainArt"></div></div>
+        
+        <div class="controls-section">
+            <p class="song-title" id="trackTitle">Sincronizando...</p>
+            <p class="artist" id="trackArtist">Aguarde o Host</p>
+            <div class="lyrics-row"><p id="current-lyric-line"></p></div>
+            <div class="bar-bg"><div class="bar-fill" id="progress"></div></div>
+            <div class="time-info"><span id="currTime">0:00</span><span id="totalTime">0:00</span></div>
+            <div class="btns">
+                <button onclick="sendCommand('shuffle')"><i class="fas fa-random"></i></button>
+                <button onclick="sendCommand('prev')"><i class="fas fa-step-backward"></i></button>
+                <button class="play" id="playIcon" onclick="sendCommand('playpause')"><i class="fas fa-pause-circle"></i></button>
+                <button onclick="sendCommand('next')"><i class="fas fa-step-forward"></i></button>
+                <button onclick="sendCommand('repeat')"><i class="fas fa-redo"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer-tools">
+        <div class="tool-btn" onclick="toggleConfig()"><i class="fas fa-user-edit"></i></div>
+        <div class="tool-btn" id="volBtn" onclick="toggleVolume()"><i class="fas fa-volume-up"></i></div>
+    </div>
+
+    <script src="https://www.youtube.com/iframe_api" async></script>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const linkVindoDoPython = urlParams.get('api');
+
+        if (linkVindoDoPython) { localStorage.setItem('jam_api_url', linkVindoDoPython); }
+
+        let API_BASE = (linkVindoDoPython || localStorage.getItem('jam_api_url') || "").replace(/\/$/, "");
+        let p1, p2, activePlayer, lastVid = "", firstSync = true, volTimer;
+        
         // --- VARIÁVEIS DE LETRA ---
         let currentLyricsArray = [];
         let lastLyricsRaw = "";
