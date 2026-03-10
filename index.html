@@ -62,7 +62,7 @@
         
         /* LETRAS */
         .lyrics-row { display: flex; align-items: center; justify-content: center; min-height: 80px; margin: 10px 0; }
-        #current-lyric-line { font-size: 1.6rem; font-weight: 700; text-align: center; color: #fff; text-shadow: 0 2px 15px rgba(0,0,0,0.8); transition: opacity 0.3s; }
+        #current-lyric-line { font-size: 1.6rem; font-weight: 700; text-align: center; color: #fff; text-shadow: 0 2px 15px rgba(0,0,0,0.8); transition: opacity 0.2s ease; opacity: 1; }
         
         .bar-bg { width: 100%; height: 5px; background: rgba(255,255,255,0.1); border-radius: 10px; cursor: pointer; }
         .bar-fill { width: 0%; height: 100%; background: #fff; border-radius: 10px; transition: width 0.3s linear; }
@@ -149,6 +149,7 @@
         // --- VARIÁVEIS DE LETRA ---
         let currentLyricsArray = [];
         let lastLyricsRaw = "";
+        let lastLyricText = "";
 
         function onYouTubeIframeAPIReady() {
             const cfg = { height: '1', width: '1', playerVars: { 'controls': 0, 'disablekb': 1, 'enablejsapi': 1, 'autoplay': 1, 'mute': 1, 'origin': window.location.origin } };
@@ -159,7 +160,11 @@
         function onPlayerReady() { if(p1 && p2 && p1.loadVideoById && p2.loadVideoById) { initApp(); } }
 
         function initApp() {
+            // Sync com servidor a cada 1s (pesado)
             setInterval(syncComServidor, 1000);
+            // Sync da letra a cada 100ms (fluido e baseado no player local)
+            setInterval(updateLyricsRealTime, 100);
+            
             checkSavedProfile();
             document.getElementById('volRange').addEventListener('input', (e) => {
                 const vol = e.target.value;
@@ -209,10 +214,11 @@
                         </div>`).join('');
                 }
 
-                // --- LÓGICA DE LETRAS ---
+                // --- PROCESSAMENTO DAS LETRAS (SÓ SE MUDAR) ---
                 if (d.lyrics && d.lyrics !== lastLyricsRaw) {
                     lastLyricsRaw = d.lyrics;
                     currentLyricsArray = d.lyrics.split('\n').map(line => {
+                        // Regex melhorada para pegar tempo e texto com caracteres especiais
                         const match = line.match(/\[(\d+):(\d+\.\d+)\](.*)/);
                         if (match) {
                             const ms = (parseInt(match[1]) * 60 + parseFloat(match[2])) * 1000;
@@ -220,14 +226,9 @@
                         }
                         return null;
                     }).filter(item => item !== null);
-                }
-
-                if (currentLyricsArray.length > 0) {
-                    const spotifyMs = prog * 1000;
-                    const line = currentLyricsArray.reduce((prev, curr) => (curr.time <= spotifyMs) ? curr : prev, currentLyricsArray[0]);
-                    document.getElementById('current-lyric-line').innerText = line ? line.text : "";
-                } else {
-                    document.getElementById('current-lyric-line').innerText = "";
+                } else if (!d.lyrics) {
+                    currentLyricsArray = [];
+                    lastLyricsRaw = "";
                 }
 
                 // --- DOUBLE BUFFERING ---
@@ -264,6 +265,35 @@
                 
                 if(d.usuarios) renderizarOuvintes(d.usuarios);
             } catch(e) { console.log("Erro na sync..."); }
+        }
+
+        // --- NOVA FUNÇÃO: SINCRONIA DE LETRA ULTRA RÁPIDA (LOCAL) ---
+        function updateLyricsRealTime() {
+            if (currentLyricsArray.length > 0 && activePlayer && activePlayer.getCurrentTime) {
+                // Pega o tempo do vídeo (YouTube) em milissegundos
+                const currentTimeMs = activePlayer.getCurrentTime() * 1000;
+                
+                // Encontra a linha atual
+                const line = currentLyricsArray.reduce((prev, curr) => 
+                    (curr.time <= currentTimeMs) ? curr : prev, currentLyricsArray[0]
+                );
+
+                const display = document.getElementById('current-lyric-line');
+                
+                // Se a frase mudou, aplica efeito de fade
+                if (line && line.text !== lastLyricText) {
+                    lastLyricText = line.text;
+                    display.style.opacity = 0; // Inicia fade out
+                    
+                    setTimeout(() => {
+                        display.textContent = line.text; // textContent é mais seguro para caracteres especiais
+                        display.style.opacity = 1; // Inicia fade in
+                    }, 150);
+                }
+            } else if (currentLyricsArray.length === 0) {
+                document.getElementById('current-lyric-line').textContent = "";
+                lastLyricText = "";
+            }
         }
 
         function renderizarOuvintes(usuarios) {
