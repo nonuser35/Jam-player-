@@ -20,11 +20,10 @@
             animation: backgroundMove 60s infinite alternate; 
         }
         @keyframes backgroundMove { 0% { transform: scale(1); } 100% { transform: scale(1.15); } }
-        .glass-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.3); z-index: 2; }
+        .glass-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.3); z-index: 2; pointer-events: none; }
         
         .container { position: relative; display: flex; flex-direction: column; height: 100vh; padding: 40px; justify-content: space-between; z-index: 3; box-sizing: border-box; max-width: 1200px; margin: 0 auto; }
         
-        /* FILA LATERAL ATUALIZADA */
         .queue-sidebar { position: fixed; left: 40px; top: 50%; transform: translateY(-50%); width: 260px; background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); border-radius: 25px; padding: 25px; border: 1px solid rgba(255,255,255,0.1); z-index: 10; max-height: 70vh; overflow-y: auto; }
         .queue-title { font-size: 0.75rem; font-weight: 800; color: #1DB954; letter-spacing: 3px; margin-bottom: 20px; text-align: center; }
         .queue-item { display: flex; align-items: center; margin-bottom: 18px; gap: 14px; }
@@ -33,7 +32,6 @@
         .queue-info p { margin: 0; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 150px; font-weight: 600; }
         .queue-info .q-artist { color: rgba(255,255,255,0.5); font-size: 0.75rem; font-weight: 400; margin-top: 2px; }
 
-        /* OUVINTES */
         .top-right-bar { position: absolute; top: 40px; right: 40px; z-index: 5; } 
         .listeners-pile { display: flex; flex-direction: row-reverse; gap: 5px; }
         .user-container { position: relative; display: flex; flex-direction: column; align-items: center; margin-left: -12px; transition: 0.3s; cursor: pointer; }
@@ -49,18 +47,15 @@
         .user-container.is-me .listener-avatar { border-color: #fff; }
         .user-container.is-me .user-name-tag { opacity: 1; transform: translateX(-50%) translateY(0); background: #fff; }
 
-        /* PLAYER VISUAL */
         .art-section { flex-grow: 1; display: flex; align-items: center; justify-content: center; }
         .circle-art { width: 320px; height: 320px; border-radius: 50%; background-size: cover; background-position: center; box-shadow: 0 30px 100px rgba(0,0,0,0.8); border: 2px solid rgba(255,255,255,0.1); animation: spin 40s linear infinite; animation-play-state: paused; transition: 0.8s; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .yt-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
         
-        /* CONTROLES */
         .controls-section { width: 100%; max-width: 700px; margin: 0 auto 50px auto; }
         .song-title { font-size: 2.2rem; font-weight: 800; margin: 0; text-align: center; letter-spacing: -1.5px; }
         .artist { font-size: 1.2rem; color: rgba(255, 255, 255, 0.5); margin-top: 5px; text-align: center; }
         
-        /* LETRAS */
         .lyrics-row { display: flex; align-items: center; justify-content: center; min-height: 80px; margin: 10px 0; }
         #current-lyric-line { font-size: 1.6rem; font-weight: 700; text-align: center; color: #fff; text-shadow: 0 2px 15px rgba(0,0,0,0.8); transition: opacity 0.2s ease; opacity: 1; }
         
@@ -72,7 +67,6 @@
         .btns button:hover { opacity: 1; transform: scale(1.1); }
         .play { font-size: 4rem !important; opacity: 1 !important; }
 
-        /* MODAL E TOOLS */
         .modal-config { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 100; display: none; align-items: center; justify-content: center; backdrop-filter: blur(20px); }
         .modal-box { background: #181818; padding: 40px; border-radius: 25px; width: 300px; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
         .modal-box input { width: 100%; background: #282828; border: 1px solid #333; padding: 12px; border-radius: 8px; color: #fff; margin-bottom: 15px; box-sizing: border-box; }
@@ -196,8 +190,9 @@
                 document.getElementById('mainArt').style.animationPlayState = d.is_playing ? 'running' : 'paused';
 
                 if (d.capa) {
-                    document.getElementById('mainArt').style.backgroundImage = `url(${d.capa})`;
-                    document.getElementById('bgImg').style.backgroundImage = `url(${d.capa})`;
+                    // AJUSTE: Corrigido uso de aspas nas URLs
+                    document.getElementById('mainArt').style.backgroundImage = `url("${d.capa}")`;
+                    document.getElementById('bgImg').style.backgroundImage = `url("${d.capa}")`;
                 }
 
                 if (d.fila) {
@@ -231,9 +226,10 @@
                     const ytState = activePlayer.getPlayerState();
                     const agora = Date.now();
 
+                    // AJUSTE: Lógica de trava de pausa manual refinada
                     if (d.is_playing) {
-                        document.getElementById('playIcon').innerHTML = '<i class="fas fa-pause-circle"></i>';
                         if (agora > pausaManualTimer) {
+                            document.getElementById('playIcon').innerHTML = '<i class="fas fa-pause-circle"></i>';
                             if (ytState !== 1 && ytState !== 3) activePlayer.playVideo();
                             const pTime = activePlayer.getCurrentTime();
                             let diff = pTime - prog;
@@ -250,7 +246,6 @@
                     } else {
                         document.getElementById('playIcon').innerHTML = '<i class="fas fa-play-circle"></i>';
                         if (ytState === 1) activePlayer.pauseVideo();
-                        pausaManualTimer = 0; 
                     }
                 }
                 if(d.usuarios) renderizarOuvintes(d.usuarios);
@@ -289,7 +284,8 @@
                 if (state === 1) { 
                     activePlayer.pauseVideo();
                     document.getElementById('playIcon').innerHTML = '<i class="fas fa-play-circle"></i>';
-                    pausaManualTimer = Date.now() + 2000; 
+                    // AJUSTE: Trava aumentada para 3 segundos para cobrir latência do servidor
+                    pausaManualTimer = Date.now() + 3000; 
                 } else { 
                     activePlayer.playVideo();
                     document.getElementById('playIcon').innerHTML = '<i class="fas fa-pause-circle"></i>';
