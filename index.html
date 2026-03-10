@@ -1,431 +1,210 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Jam Sync Player | Ultra Sync</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700;800&display=swap" rel="stylesheet">
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #000; overflow: hidden; color: white; font-family: 'Montserrat', sans-serif; }
+        .bg-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; overflow: hidden; }
+        .bg-image { position: absolute; top: -5%; left: -5%; width: 110%; height: 110%; background-size: cover; background-position: center; transition: background-image 1s ease-in-out; filter: blur(3px); will-change: transform; animation: backgroundMove 40s ease-in-out infinite alternate; }
+        @keyframes backgroundMove { 0% { transform: scale(1); } 100% { transform: scale(1.1); } }
+        .glass-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.4); z-index: 2; }
+        
+        .container { position: relative; display: flex; flex-direction: column; height: 100vh; padding: 30px 40px; justify-content: space-between; z-index: 3; box-sizing: border-box; max-width: 900px; margin: 0 auto; }
+        .header-info { text-align: center; width: 100%; }
+        .from-spotify { font-size: 0.8rem; font-weight: 400; text-transform: uppercase; color: #fff; letter-spacing: 4px; opacity: 0.7; }
+        .playlist-name { font-size: 1.1rem; font-weight: 700; color: #fff; margin: 5px 0; }
+        
+        .top-right-bar { position: absolute; top: 30px; right: 40px; z-index: 5; }
+        .listeners-pile { display: flex; flex-direction: row-reverse; align-items: flex-start; }
+        .user-container { display: flex; flex-direction: column; align-items: center; margin-left: -20px; transition: 0.3s; }
+        .listener-avatar { width: 50px; height: 50px; border-radius: 50%; background-size: cover; border: 3px solid #000; background-position: center; box-shadow: -5px 0 15px rgba(0,0,0,0.5); }
+        .user-name-tag { font-size: 0.55rem; font-weight: 700; margin-top: 5px; text-transform: uppercase; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 4px; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
 
-<link rel="preconnect" href="https://www.youtube.com">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700;800&display=swap" rel="stylesheet">
+        .art-section { flex-grow: 1; display: flex; align-items: center; justify-content: center; }
+        .circle-art { width: 320px; height: 320px; border-radius: 50%; background-size: cover; background-position: center; box-shadow: 0 20px 80px rgba(0,0,0,0.8); border: 2px solid rgba(255,255,255,0.1); animation: spin 30s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        
+        #yt-player { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+        .controls-section { width: 100%; margin-bottom: 80px; }
+        .song-title { font-size: 2.2rem; font-weight: 800; margin: 0; letter-spacing: -1px; }
+        .artist { font-size: 1.2rem; color: rgba(255, 255, 255, 0.6); margin-top: 5px; }
+        .lyrics-row { display: flex; align-items: center; min-height: 40px; margin: 20px 0; }
+        #current-lyric-line { font-size: 1.4rem; font-weight: 700; color: #fff; }
 
-<style>
+        .bar-bg { width: 100%; height: 6px; background: rgba(255,255,255,0.15); border-radius: 10px; overflow: hidden; }
+        .bar-fill { width: 0%; height: 100%; background: #fff; transition: width 0.5s linear; }
+        .time-info { display: flex; justify-content: space-between; font-size: 0.9rem; color: rgba(255, 255, 255, 0.5); margin-top: 10px; font-weight: 600; }
+        
+        .btns { display: flex; justify-content: space-between; align-items: center; margin-top: 30px; }
+        .btns button { font-size: 2rem; }
+        .play { font-size: 4.5rem !important; }
+        button { background: none; border: none; color: white; cursor: pointer; transition: transform 0.2s; }
+        
+        .volume-popover { position: absolute; bottom: 30px; right: 100px; width: 180px; height: 45px; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border-radius: 30px; display: none; align-items: center; justify-content: center; z-index: 20; padding: 0 15px; }
+        .volume-popover input { width: 100%; cursor: pointer; accent-color: #fff; }
 
-/* ===== TODO O CSS ORIGINAL MANTIDO ===== */
-
-body,html{
-margin:0;
-padding:0;
-width:100%;
-height:100%;
-background:#000;
-overflow:hidden;
-color:white;
-font-family:'Montserrat',sans-serif
-}
-
-.bg-container{
-position:fixed;
-top:0;
-left:0;
-width:100%;
-height:100%;
-z-index:1;
-overflow:hidden
-}
-
-.bg-image{
-position:absolute;
-top:-10%;
-left:-10%;
-width:120%;
-height:120%;
-background-size:cover;
-background-position:center;
-transition:background-image 1.2s ease-in-out;
-filter:blur(3px) brightness(0.4);
-animation:backgroundMove 60s infinite alternate
-}
-
-@keyframes backgroundMove{
-0%{transform:scale(1)}
-100%{transform:scale(1.15)}
-}
-
-.glass-overlay{
-position:fixed;
-top:0;
-left:0;
-width:100%;
-height:100%;
-background:rgba(0,0,0,0.3);
-z-index:2
-}
-
-.container{
-position:relative;
-display:flex;
-flex-direction:column;
-height:100vh;
-padding:40px;
-justify-content:space-between;
-z-index:3;
-box-sizing:border-box;
-max-width:1200px;
-margin:0 auto
-}
-
-/* FILA */
-
-.queue-sidebar{
-position:fixed;
-left:40px;
-top:50%;
-transform:translateY(-50%);
-width:260px;
-background:rgba(255,255,255,0.05);
-backdrop-filter:blur(20px);
-border-radius:25px;
-padding:25px;
-border:1px solid rgba(255,255,255,0.1);
-z-index:10;
-max-height:70vh;
-overflow-y:auto
-}
-
-.queue-title{
-font-size:0.95rem;
-font-weight:800;
-color:#1DB954;
-letter-spacing:3px;
-margin-bottom:25px;
-text-align:center
-}
-
-.queue-item{
-display:flex;
-align-items:center;
-margin-bottom:20px;
-gap:14px
-}
-
-.queue-item img{
-width:52px;
-height:52px;
-border-radius:8px;
-flex-shrink:0;
-object-fit:cover
-}
-
-.queue-info{
-overflow:hidden
-}
-
-.queue-info p{
-margin:0;
-font-size:1rem;
-white-space:nowrap;
-overflow:hidden;
-text-overflow:ellipsis;
-width:160px;
-font-weight:600
-}
-
-.queue-info .q-artist{
-color:rgba(255,255,255,0.5);
-font-size:0.85rem;
-font-weight:400;
-margin-top:3px
-}
-
-/* CONTROLES */
-
-.song-title{
-font-size:2.2rem;
-font-weight:800;
-margin:0;
-text-align:center;
-letter-spacing:-1.5px
-}
-
-.artist{
-font-size:1.2rem;
-color:rgba(255,255,255,0.5);
-margin-top:5px;
-text-align:center
-}
-
-.bar-bg{
-width:100%;
-height:5px;
-background:rgba(255,255,255,0.1);
-border-radius:10px;
-cursor:pointer
-}
-
-.bar-fill{
-width:0%;
-height:100%;
-background:#fff;
-border-radius:10px;
-transition:width 0.3s linear
-}
-
-.time-info{
-display:flex;
-justify-content:space-between;
-font-size:0.8rem;
-color:rgba(255,255,255,0.4);
-margin-top:8px;
-font-weight:700
-}
-
-.btns{
-display:flex;
-justify-content:center;
-gap:30px;
-align-items:center;
-margin-top:25px
-}
-
-.btns button{
-font-size:1.5rem;
-opacity:0.6;
-transition:0.3s;
-color:white;
-background:none;
-border:none;
-cursor:pointer
-}
-
-.play{
-font-size:4rem !important;
-opacity:1 !important
-}
-
-</style>
+        .footer-tools { position: absolute; bottom: 30px; left: 0; width: 100%; padding: 0 40px; display: flex; justify-content: space-between; box-sizing: border-box; z-index: 10; }
+        .tool-btn { width: 50px; height: 50px; border-radius: 50%; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 1.2rem; cursor: pointer; }
+        
+        .modal-config { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 100; display: none; align-items: center; justify-content: center; backdrop-filter: blur(20px); }
+        .modal-box { background: rgba(255,255,255,0.05); padding: 40px; border-radius: 30px; width: 350px; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
+        .modal-box input[type="text"] { width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); padding: 15px; border-radius: 15px; color: #fff; font-family: Montserrat; font-size: 1rem; margin-bottom: 20px; box-sizing: border-box; }
+        .file-label { display: block; background: rgba(255,255,255,0.1); padding: 15px; border-radius: 15px; font-size: 0.9rem; cursor: pointer; margin-bottom: 30px; }
+    </style>
 </head>
-
 <body>
-
-<div id="player1"></div>
-<div id="player2"></div>
-
-<div class="bg-container">
-<div class="bg-image" id="bgImg"></div>
-</div>
-
-<div class="glass-overlay"></div>
-
-<div class="queue-sidebar">
-<p class="queue-title">PRÓXIMAS</p>
-<div id="queueItems"></div>
-</div>
-
-<div class="container">
-
-<div class="controls-section">
-
-<p class="song-title" id="trackTitle">Sincronizando...</p>
-<p class="artist" id="trackArtist">Aguarde o Host</p>
-
-<div class="bar-bg">
-<div class="bar-fill" id="progress"></div>
-</div>
-
-<div class="time-info">
-<span id="currTime">0:00</span>
-<span id="totalTime">0:00</span>
-</div>
-
-<div class="btns">
-<button onclick="sendCommand('prev')"><i class="fas fa-step-backward"></i></button>
-<button class="play" id="playIcon" onclick="sendCommand('playpause')"><i class="fas fa-pause-circle"></i></button>
-<button onclick="sendCommand('next')"><i class="fas fa-step-forward"></i></button>
-</div>
-
-</div>
-</div>
-
-<script src="https://www.youtube.com/iframe_api"></script>
-
-<script>
-
-/* =========================
-VARIÁVEIS
-========================= */
-
-let p1,p2,activePlayer,lastVid=""
-let pausaManualTimer=0
-let socket=null
-
-/* =========================
-YOUTUBE
-========================= */
-
-function onYouTubeIframeAPIReady(){
-
-const cfg={
-height:'1',
-width:'1',
-playerVars:{
-controls:0,
-disablekb:1,
-enablejsapi:1,
-autoplay:1
-}
-}
-
-p1=new YT.Player('player1',{...cfg})
-p2=new YT.Player('player2',{...cfg})
-
-initSync()
-
-}
-
-/* =========================
-WEBSOCKET (OPÇÃO 1)
-========================= */
-
-function initSync(){
-
-try{
-
-socket=new WebSocket(`ws://${location.host}/ws`)
-
-socket.onmessage=(event)=>{
-
-const data=JSON.parse(event.data)
-
-applyServerState(data)
-
-}
-
-}catch(e){
-
-console.log("WebSocket indisponível, usando polling")
-
-}
-
-setInterval(syncComServidor,1000)
-
-}
-
-/* =========================
-POLLING BACKUP
-========================= */
-
-async function syncComServidor(){
-
-try{
-
-const res=await fetch(`/status`)
-const data=await res.json()
-
-applyServerState(data)
-
-}catch(e){}
-
-}
-
-/* =========================
-APLICAR ESTADO DO SERVIDOR
-========================= */
-
-function applyServerState(d){
-
-if(!activePlayer) return
-
-const prog=parseFloat(d.progress)||0
-const dura=d.duration||1
-
-document.getElementById('progress').style.width=((prog/dura)*100)+"%"
-
-if(d.video_id && d.video_id!==lastVid){
-
-let next=(activePlayer===p1)?p2:p1
-
-next.loadVideoById(d.video_id,prog)
-
-if(activePlayer) activePlayer.pauseVideo()
-
-activePlayer=next
-
-lastVid=d.video_id
-
-}
-
-/* =========================
-MICRO CORREÇÃO (OPÇÃO 2)
-========================= */
-
-const pTime=activePlayer.getCurrentTime()
-
-let diff=pTime-prog
-
-if(Math.abs(diff)>2){
-
-activePlayer.seekTo(prog,true)
-
-}else{
-
-if(diff>0.15){
-
-activePlayer.setPlaybackRate(0.98)
-
-}
-else if(diff<-0.15){
-
-activePlayer.setPlaybackRate(1.02)
-
-}
-else{
-
-activePlayer.setPlaybackRate(1)
-
-}
-
-}
-
-}
-
-/* =========================
-COMANDOS
-========================= */
-
-async function sendCommand(cmd){
-
-if(cmd==="playpause" && activePlayer){
-
-const state=activePlayer.getPlayerState()
-
-if(state===1){
-
-activePlayer.pauseVideo()
-document.getElementById('playIcon').innerHTML='<i class="fas fa-play-circle"></i>'
-
-pausaManualTimer=Date.now()+3000
-
-}else{
-
-activePlayer.playVideo()
-document.getElementById('playIcon').innerHTML='<i class="fas fa-pause-circle"></i>'
-
-pausaManualTimer=0
-
-}
-
-}
-
-fetch(`/command`,{
-method:"POST",
-headers:{'Content-Type':'application/json'},
-body:JSON.stringify({cmd:cmd})
-})
-
-}
-
-</script>
-
+    <div id="yt-player"></div>
+    <div class="bg-container"><div class="bg-image" id="bgImg"></div></div>
+    <div class="glass-overlay"></div>
+    
+    <div class="modal-config" id="configModal">
+        <div class="modal-box">
+            <p style="font-size: 0.8rem; letter-spacing: 3px; font-weight: 800; color: rgba(255,255,255,0.5); margin-bottom: 25px;">CONFIGURAR PERFIL</p>
+            <input type="text" id="inputName" placeholder="Seu apelido...">
+            <label class="file-label"><i class="fas fa-image" style="margin-right: 10px;"></i> Escolher Foto<input type="file" id="inputFile" accept="image/*" style="display: none;"></label>
+            <button onclick="saveProfile()" style="background: #fff; color: #000; padding: 18px; width: 100%; border-radius: 15px; font-weight: 800; border: none; cursor: pointer; font-size: 1rem;">ENTRAR NA JAM</button>
+            <span onclick="toggleConfig()" id="btnVoltarModal" style="display:none; margin-top:20px; font-size:0.7rem; opacity:0.5; cursor:pointer;">VOLTAR</span>
+        </div>
+    </div>
+
+    <div class="volume-popover" id="volumePop"><input type="range" min="0" max="100" value="70" id="volRange"></div>
+
+    <div class="container">
+        <div class="header-info">
+            <p class="from-spotify">Jam Sync Ativa</p>
+            <p class="playlist-name" id="status-msg">Carregando...</p>
+        </div>
+        <div class="top-right-bar"><div class="listeners-pile" id="pile"></div></div>
+        <div class="art-section"><div class="circle-art" id="mainArt"></div></div>
+        <div class="controls-section">
+            <div class="track-info">
+                <p class="song-title" id="trackTitle">Sincronizando...</p>
+                <p class="artist" id="trackArtist">...</p>
+            </div>
+            <div class="lyrics-row"><p id="current-lyric-line"></p></div>
+            <div class="bar-bg"><div class="bar-fill" id="progress"></div></div>
+            <div class="time-info"><span id="currTime">0:00</span><span id="totalTime">0:00</span></div>
+            <div class="btns">
+                <button><i class="fas fa-random"></i></button>
+                <button><i class="fas fa-step-backward"></i></button>
+                <button class="play" id="playIcon"><i class="fas fa-play-circle"></i></button>
+                <button><i class="fas fa-step-forward"></i></button>
+                <button><i class="fas fa-redo"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer-tools">
+        <div class="tool-btn" onclick="toggleConfig()"><i class="fas fa-cog"></i></div>
+        <div class="tool-btn" onclick="toggleVolume()"><i class="fas fa-volume-up"></i></div>
+    </div>
+
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script>
+        let player; let lastVid = ""; let firstSync = true;
+
+        function checkSavedProfile() {
+            if (!localStorage.getItem('jam_name')) {
+                document.getElementById('configModal').style.display = 'flex';
+                document.getElementById('btnVoltarModal').style.display = 'none';
+            } else {
+                document.getElementById('btnVoltarModal').style.display = 'block';
+            }
+        }
+
+        function onYouTubeIframeAPIReady() {
+            player = new YT.Player('yt-player', {
+                height: '1', width: '1', playerVars: { 'autoplay': 1, 'controls': 0, 'disablekb': 1 },
+                events: { 'onReady': () => {
+                    setInterval(syncComServidor, 1000);
+                    checkSavedProfile();
+                }}
+            });
+        }
+
+        async function syncComServidor() {
+            const nome = localStorage.getItem('jam_name') || "Ouvinte Temporário";
+            const foto = localStorage.getItem('jam_pic') || "";
+            const payload = { nome: nome, foto: firstSync ? foto : "" };
+
+            try {
+                const res = await fetch('/status', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const d = await res.json();
+                firstSync = false;
+                
+                document.getElementById('status-msg').innerText = d.is_playing ? "Escutando da Jam" : "Spotify em Pausa";
+                document.getElementById('trackTitle').innerText = d.track_name || "Pausado";
+                document.getElementById('trackArtist').innerText = d.artist_name || "";
+                document.getElementById('current-lyric-line').innerText = d.current_line || "";
+                document.getElementById('playIcon').innerHTML = d.is_playing ? '<i class="fas fa-pause-circle"></i>' : '<i class="fas fa-play-circle"></i>';
+                document.getElementById('progress').style.width = ((d.progress / d.duration) * 100) + "%";
+                document.getElementById('currTime').innerText = Math.floor(d.progress/60) + ":" + (d.progress%60).toString().padStart(2,'0');
+                document.getElementById('totalTime').innerText = Math.floor(d.duration/60) + ":" + (d.duration%60).toString().padStart(2,'0');
+                
+                if (d.capa) {
+                    document.getElementById('mainArt').style.backgroundImage = `url(${d.capa})`;
+                    document.getElementById('bgImg').style.backgroundImage = `url(${d.capa})`;
+                }
+                if (d.video_id && d.video_id !== lastVid) { player.loadVideoById(d.video_id, d.progress); lastVid = d.video_id; }
+                if (player && player.getCurrentTime) {
+                    let diff = Math.abs(player.getCurrentTime() - d.progress);
+                    if (diff > 3) player.seekTo(d.progress, true);
+                    d.is_playing ? player.playVideo() : player.pauseVideo();
+                }
+                renderizarOuvintes(d.usuarios);
+            } catch(e) {}
+        }
+
+        function renderizarOuvintes(usuarios) {
+            const pile = document.getElementById('pile'); 
+            if (pile.children.length === usuarios.length) return; 
+            pile.innerHTML = '';
+            usuarios.forEach(u => {
+                const container = document.createElement('div'); container.className = 'user-container';
+                const avatar = document.createElement('div'); avatar.className = 'listener-avatar';
+                avatar.style.backgroundImage = `url(${u.foto || 'https://www.gravatar.com/avatar/?d=mp'})`;
+                if(u.is_host) avatar.style.outline = "3px solid #1DB954";
+                const nameTag = document.createElement('div'); nameTag.className = 'user-name-tag';
+                nameTag.innerText = u.nome;
+                container.appendChild(avatar); container.appendChild(nameTag);
+                pile.appendChild(container);
+            });
+        }
+
+        function toggleVolume() {
+            const v = document.getElementById('volumePop');
+            v.style.display = v.style.display === 'flex' ? 'none' : 'flex';
+        }
+
+        function toggleConfig() {
+            const m = document.getElementById('configModal');
+            m.style.display = m.style.display === 'flex' ? 'none' : 'flex';
+        }
+
+        function saveProfile() {
+            const name = document.getElementById('inputName').value;
+            const file = document.getElementById('inputFile').files[0];
+            if(name) {
+                localStorage.setItem('jam_name', name);
+                firstSync = true;
+            }
+            if(file) {
+                const reader = new FileReader();
+                reader.onload = (e) => { 
+                    localStorage.setItem('jam_pic', e.target.result); 
+                    toggleConfig(); 
+                };
+                reader.readAsDataURL(file);
+            } else if(name) { 
+                toggleConfig(); 
+            }
+        }
+    </script>
 </body>
 </html>
