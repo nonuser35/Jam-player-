@@ -83,9 +83,39 @@ let ytPlayerReady = {
 let transitionSwapped = false;
 let isYTUnlocked = false;
 
-let API_BASE = localStorage.getItem('jamApiLink') || 'http://localhost:3000';
-let STATUS_ENDPOINT = `${API_BASE}/status`;
-let PING_ENDPOINT = `${API_BASE}/ping`;
+// --- CONFIGURAÇÃO DE CONEXÃO ---
+let API_BASE = localStorage.getItem('jamApiLink') || 'http://localhost:8000';
+
+// Função para atualizar as rotas sempre que o link mudar
+function updateEndpoints(url) {
+    API_BASE = url.replace(/\/+$/, '');
+    localStorage.setItem('jamApiLink', API_BASE);
+    console.log('🔗 Nova API configurada:', API_BASE);
+}
+
+// Captura o link ?api= da URL do navegador
+function checkUrlParams() {
+    const params = new URLSearchParams(window.location.search);
+    const apiFromUrl = params.get('api');
+    if (apiFromUrl) {
+        updateEndpoints(decodeURIComponent(apiFromUrl));
+        // Limpa a URL para ficar bonita, mas mantém o link salvo
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+}
+
+function getStatusEndpoint() {
+    return `${API_BASE}/status`;
+}
+
+function getPingEndpoint() {
+    return `${API_BASE}/ping`;
+}
+
+function updateApiEndpoint(url) {
+    updateEndpoints(url);
+}
+
 let isSyncLoading = false;
 let latencyMs = 0;
 let lastPayload = null;
@@ -225,9 +255,9 @@ function onYTPlayerError(event) {
   if ([100, 101, 150].includes(code)) {
     console.warn('YouTube error', code, '-> pulando para próximo');
     // avisa o servidor (se endpoint suportar) e avança localmente
-    fetch(`${STATUS_ENDPOINT}/command`, {
+    fetch(`${getStatusEndpoint()}/command`, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true'},
       body: JSON.stringify({command: 'next'})
     }).catch(() => null);
     playNext();
@@ -266,7 +296,7 @@ function setPlaybackRateForActive(rate) {
 async function measureLatency() {
   const start = Date.now();
   try {
-    const res = await fetch(PING_ENDPOINT, {cache: 'no-store'});
+    const res = await fetch(getPingEndpoint(), {cache: 'no-store'});
     if (!res.ok) throw new Error('Ping falhou');
     const end = Date.now();
     latencyMs = end - start;
@@ -302,11 +332,7 @@ function setConnectionStatus(connected, msg) {
 }
 
 function updateApiEndpoint(url) {
-  if (!url) return;
-  API_BASE = url.replace(/\/+$/, '');
-  localStorage.setItem('jamApiLink', API_BASE);
-  STATUS_ENDPOINT = `${API_BASE}/status`;
-  PING_ENDPOINT = `${API_BASE}/ping`;
+  updateEndpoints(url);
 }
 
 function tryAutoConfigureFromUrl() {
@@ -339,9 +365,9 @@ async function validateApiLink(url) {
 
 async function postProfile(name, avatar) {
   try {
-    const resp = await fetch(STATUS_ENDPOINT, {
+    const resp = await fetch(getStatusEndpoint(), {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true'},
       body: JSON.stringify({nome: name, foto: avatar})
     });
     if (!resp.ok) throw new Error('Falha no POST perfil');
@@ -374,16 +400,21 @@ function getDominantColor(imgUrl, callback) {
 }
 
 async function fetchServerStatus() {
-  try {
-    const resp = await fetch(STATUS_ENDPOINT + '?_=' + Date.now(), { cache: 'no-store' });
-    if (!resp.ok) throw new Error('Status não disponível');
-    const payload = await resp.json();
-    await updateFromServerPayload(payload);
-  } catch (error) {
-    console.warn('status fetch', error);
-    serverStatusText.textContent = 'Erro server: ' + (error.message || 'offline');
-    connectionIcon.textContent = '🔴';
-  }
+    try {
+        const STATUS_ENDPOINT = `${API_BASE}/status`;
+        const resp = await fetch(STATUS_ENDPOINT + '?_=' + Date.now(), {
+            cache: 'no-store',
+            headers: { 'ngrok-skip-browser-warning': 'true' }
+        });
+
+        if (!resp.ok) throw new Error('Servidor Offline');
+        const payload = await resp.json();
+        updateFromServerPayload(payload);
+        setConnectionStatus(true, 'Online');
+    } catch (error) {
+        console.warn('Erro de sincronização:', error);
+        setConnectionStatus(false, 'Reconectando...');
+    }
 }
 
 function startServerSync() {
@@ -751,7 +782,7 @@ profileFile.addEventListener('change', (event) => {
 });
 
 function init() {
-  const hasAutoApi = tryAutoConfigureFromUrl();
+  const hasAutoApi = checkUrlParams();
   setTimeout(() => {
     serverStatusText.textContent = 'JAM Spotify ON';
     connectionIcon.textContent = hasAutoApi ? '🟡' : '🟢';
