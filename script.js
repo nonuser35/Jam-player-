@@ -79,7 +79,8 @@ function onReady() {
 }
 
 function onStateChange(e) {
-  if (e.data === 0) nextBtn.click();  // END auto-next
+  if (e.data === 1) onVideoLoaded(ytPlayer.getDuration());  // PLAYING → set duration 1x
+  if (e.data === 0) nextBtn.click();
 }
 
 function loadVideo(id) {
@@ -179,34 +180,26 @@ cancelProfile.onclick = () => settingsPanel.classList.add('hidden');
 // ===== INITS =====
 initApiBase();
 if (isValidApi()) syncInterval = setInterval(fetchStatus, 2000);
-startTimeUpdate();
 
-// Tempo player liso - só após vídeo carregado
-let timeInterval = null;
-let isVideoLoaded = false;
+// Tempo: consulta 1x + CSS animação
+let videoDuration = 0;
 
-function startTimeUpdate() {
-  if (timeInterval) clearInterval(timeInterval);
-  isVideoLoaded = false;
-  timeInterval = setInterval(() => {
-    if (ytPlayer && ytPlayer.getVideoData) {
-      const data = ytPlayer.getVideoData();
-      if (data && data.video_id) isVideoLoaded = true;
-      
-      if (isVideoLoaded) {
-        const current = ytPlayer.getCurrentTime();
-        const duration = ytPlayer.getDuration();
-        if (duration > 0 && !isNaN(current)) {
-          updateProgress(current, duration);
-        }
-      }
-    }
-  }, 250);
+function onVideoLoaded(duration) {
+  videoDuration = duration;
+  progress.max = 100;
+  progress.style.transition = 'value 0s linear';  // Animação nativa
+  currentTime.style.transition = 'none';
+  durationTime.textContent = formatTime(duration);
+  console.log('⏱️ Duration set:', duration);
 }
 
-function stopTimeUpdate() {
-  if (timeInterval) {
-    clearInterval(timeInterval);
-    timeInterval = null;
+function updateProgress(current, duration) {
+  if (videoDuration > 0) {
+    const percent = (current / videoDuration) * 100;
+    progress.value = percent;
+    currentTime.textContent = formatTime(current);
   }
 }
+
+// Remover interval - usa eventos YT
+
