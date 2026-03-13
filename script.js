@@ -232,6 +232,14 @@ function initializeYTPlayers() {
     didSeekOnTrack = false;
   }
 
+  // Se o servidor estava tocando antes do ready e já temos payload, tentar iniciar imediatamente
+  if (lastPayload && lastPayload.is_playing === true && activeVideoId === (lastPayload.video_id ? String(lastPayload.video_id).trim() : null)) {
+    unlockYTPlayers();
+    try { activeYTPlayer.playVideo(); } catch (e) { console.warn('playVideo falhou no initialize', e); }
+    setPlayButtonState('playing');
+    isPlaying = true;
+  }
+
   setActiveVisual('player1');
 }
 
@@ -508,27 +516,14 @@ async function updateFromServerPayload(data) {
         activeYTPlayer.loadVideoById({ videoId: serverVideoId, startSeconds: normalizedProgress || 0 });
       }
 
-      isInitialSyncDone = false;
+      isInitialSyncDone = true;
       preEndSyncDone = false;
     }
   }
 
-  // 2) Sync imediato quando a faixa começa a tocar pela primeira vez no site ou volta do pause
-  const requiredInitialSync = serverVideoId && !isInitialSyncDone && activeYTPlayer && typeof activeYTPlayer.seekTo === 'function';
-  if (requiredInitialSync) {
-    try {
-      activeYTPlayer.seekTo(normalizedProgress, true);
-      console.debug('initial sync:', normalizedProgress);
-    } catch (err) {
-      console.warn('initial sync seekTo falhou', err);
-    }
-    isInitialSyncDone = true;
-    lastSyncedVideoId = activeVideoId;
-  }
-
   const resumedFromPause = serverPlaying === true && lastServerIsPlaying === false;
   const justPaused = serverPlaying === false && lastServerIsPlaying === true;
-  const jumpSync = sameTrack && jumpOffset > 3.5;
+  const jumpSync = sameTrack && serverPlaying === true && lastServerIsPlaying === true && jumpOffset > 8;
 
   if (resumedFromPause || justPaused || jumpSync) {
     if (activeYTPlayer && typeof activeYTPlayer.seekTo === 'function') {
