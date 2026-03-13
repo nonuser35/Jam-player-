@@ -495,10 +495,11 @@ function updateFromServerPayload(data) {
     return;
   }
 
-  // ===== SYNC #3: DESPAUSE =====
+  // ===== SYNC #3: DESPAUSE (só uma vez) =====
   if (serverPlaying && !lastServerIsPlaying) {
     console.log(`🔄 Sync #3 (despause): ${normalizedProgress.toFixed(1)}s`);
     activeYTPlayer.seekTo(normalizedProgress, true);
+    lastServerIsPlaying = true; // ✅ Evita spam
     return;
   }
 
