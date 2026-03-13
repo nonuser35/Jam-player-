@@ -495,15 +495,13 @@ function updateFromServerPayload(data) {
     return;
   }
 
-  // ===== SYNC #3 DESABILITADO (causa spam/pauses server) =====
-  /*
-  if (serverPlaying && !lastServerIsPlaying) {
+  // ===== SYNC #3: Despause SÓ se YT PAUSED =====
+  if (serverPlaying && !lastServerIsPlaying && activeYTPlayer.getPlayerState() !== 1) {
     console.log(`🔄 Sync #3 (despause): ${normalizedProgress.toFixed(1)}s`);
     activeYTPlayer.seekTo(normalizedProgress, true);
     lastServerIsPlaying = true;
     return;
   }
-  */
 
   // ===== SYNC #4: ÚLTIMOS 4s =====
   if (normalizedProgress > duration - 4) {
@@ -536,7 +534,8 @@ function updateFromServerPayload(data) {
   if (Array.isArray(data.usuarios)) renderListeners(data.usuarios);
 
   lastServerProgress = normalizedProgress;
-  lastServerIsPlaying = serverPlaying;
+  if (!serverPlaying) lastServerIsPlaying = false;  // ✅ Reset para próximo despause
+  else lastServerIsPlaying = serverPlaying;
 }
 
 function updateTrackInfo(track) {
