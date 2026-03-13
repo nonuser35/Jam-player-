@@ -320,7 +320,8 @@ function normalizeSeconds(value) {
   if (number < 0) number = 0;
 
   // Suporta tanto segundos quanto milissegundos do server (Spotify usa ms, mas o app pode fornecer s)
-  if (number > 10000) {
+  // Qualquer valor maior que 1000 provavelmente é ms (música nunca tem >1000s / ~16m de forma comum)
+  if (number > 1000) {
     return number / 1000;
   }
   return number;
@@ -475,6 +476,9 @@ async function updateFromServerPayload(data) {
   // Certifica que progressSec não exceda duração + 1s por causa de valores estranhos
   const normalizedProgress = duration > 0 ? Math.min(progressSec, duration + 1) : progressSec;
 
+  // Forçamos a leitura do estado de playing antes do uso, para não usar variável indefinida.
+  const serverPlaying = (typeof data.is_playing === 'boolean') ? data.is_playing : null;
+
   // Ajusta tempo da barra usando servidor até o player estiver pronto ou em pausa.
   const shouldUseServerProgress = !activeYTPlayer || !ytPlayerReady.player1 || !ytPlayerReady.player2 || !isInitialSyncDone || serverPlaying === false;
   if (shouldUseServerProgress) {
@@ -488,7 +492,6 @@ async function updateFromServerPayload(data) {
   // Gerenciamento de double-buffering (crossfade)
   const serverVideoId = data.video_id ? String(data.video_id).trim() : null;
   const nowServerTimestamp = getServerTimestampMs(data);
-  const serverPlaying = (typeof data.is_playing === 'boolean') ? data.is_playing : null;
 
   const serverTrackChanged = serverVideoId && serverVideoId !== activeVideoId;
   const sameTrack = serverVideoId && serverVideoId === activeVideoId;
@@ -757,8 +760,17 @@ function playPrev() {
 }
 
 function refreshProgressDisplay() {
-  if (!activeYTPlayer || !activeYTPlayer.getCurrentTime) return;
-  const duration = activeYTPlayer.getDuration ? activeYTPlayer.getDuration() : (lastPayload ? Number(lastPayload.duration) || 0 : 0);
+  const duration = activeYTPlayer && activeYTPlayer.getDuration ? activeYTPlayer.getDuration() : (lastPayload ? normalizeSeconds(lastPayload.duration) : 0);
+
+  // Caso ainda não tenha feito sync inicial ou esteja com o servidor pausado, não animar pela posição local.
+  if (!isInitialSyncDone || lastServerIsPlaying === false || !activeYTPlayer || !activeYTPlayer.getCurrentTime) {
+    if (lastPayload) {
+      const serverProgress = lastPayload.timestamp ? getServerProgressWithLatency(lastPayload) : normalizeSeconds(lastPayload.progress);
+      updateProgressDisplay(Math.min(serverProgress, duration), duration);
+    }
+    return;
+  }
+
   const current = activeYTPlayer.getCurrentTime ? activeYTPlayer.getCurrentTime() : 0;
   updateProgressDisplay(current, duration);
 }
