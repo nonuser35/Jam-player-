@@ -97,6 +97,10 @@ let lastServerVideoId = null;
 let lastSyncedVideoId = null;
 let users = [];
 let pendingVideoId = null;
+let isInitialSyncDone = false;
+let preEndSyncDone = false;
+let lastServerIsPlaying = false;
+let userSeeked = false;
 
 const apiLinkInput = document.getElementById('apiLinkInput');
 const connectBtn = document.getElementById('connectBtn');
@@ -159,7 +163,7 @@ function onYouTubeIframeAPIReady() {
   ytPlayer1 = new YT.Player('player1', {
     height: '100%',
     width: '100%',
-    videoId: activeVideoId || 'dQw4w9WgXcQ',
+    videoId: activeVideoId || '',
     playerVars: {
       autoplay: 0,
       controls: 0,
@@ -179,7 +183,7 @@ function onYouTubeIframeAPIReady() {
   ytPlayer2 = new YT.Player('player2', {
     height: '100%',
     width: '100%',
-    videoId: activeVideoId || 'dQw4w9WgXcQ',
+    videoId: activeVideoId || '',
     playerVars: {
       autoplay: 0,
       controls: 0,
@@ -453,16 +457,14 @@ async function updateFromServerPayload(data) {
 
   if (serverVideoId) {
     if (!activeYTPlayer || !standbyYTPlayer || !ytPlayerReady.player1 || !ytPlayerReady.player2) {
-      // ainda não há player pronto, armazena para quando estiver disponível
       pendingVideoId = serverVideoId;
     } else if (!activeVideoId) {
-      // primeira música carregada depois que a API está pronta
       activeVideoId = serverVideoId;
       lastServerVideoId = serverVideoId;
       activeYTPlayer.loadVideoById(serverVideoId);
-      didSeekOnTrack = false;
+      isInitialSyncDone = false;
+      preEndSyncDone = false;
     } else if (serverVideoId !== activeVideoId) {
-      // troca de faixa detectada
       standbyVideoId = serverVideoId;
       lastServerVideoId = serverVideoId;
 
@@ -470,12 +472,24 @@ async function updateFromServerPayload(data) {
       standbyYTPlayer.cueVideoById(serverVideoId);
       standbyYTPlayer.pauseVideo();
 
-      // crossfade: ativa standby e desativa o antigo
       swapToStandbyPlayer();
       activeVideoId = serverVideoId;
       standbyVideoId = null;
-      didSeekOnTrack = false;
+      isInitialSyncDone = false;
+      preEndSyncDone = false;
     }
+  }
+
+  // Primeiro sync inicial (após troca / conexão)
+  if (serverVideoId && !isInitialSyncDone && activeYTPlayer && typeof activeYTPlayer.seekTo === 'function' && !Number.isNaN(progressSec)) {
+    try {
+      activeYTPlayer.seekTo(progressSec, true);
+      console.debug('initial sync:', progressSec);
+    } catch (err) {
+      console.warn('initial sync seekTo falhou', err);
+    }
+    isInitialSyncDone = true;
+    lastSyncedVideoId = activeVideoId;
   }
 
   // Atualiza estado de reprodução (servidor/reprodutor)
@@ -492,29 +506,40 @@ async function updateFromServerPayload(data) {
     }
   }
 
-  // RE-sync for drift if the source keeps playing and progress changes
-  if (activeYTPlayer && typeof data.is_playing === 'boolean' && data.is_playing && !Number.isNaN(progressSec)) {
+  // Ajuste em pausa do servidor (faz sync e pausa no site)
+  if (typeof data.is_playing === 'boolean' && data.is_playing === false && activeYTPlayer) {
     const current = activeYTPlayer.getCurrentTime ? activeYTPlayer.getCurrentTime() : 0;
-    const delta = Math.abs(current - progressSec);
-    if (delta > 0.75) {
-      try { activeYTPlayer.seekTo(progressSec, true); } catch (e) { console.warn('Re-sync seekTo falhou', e); }
-      console.debug('Re-sync for drift', {delta, progressSec, current});
+    if (Math.abs(current - progressSec) > 0.3) {
+      try { activeYTPlayer.seekTo(progressSec, true); } catch (e) { console.warn('pause sync seekTo falhou', e); }
+    }
+    try { activeYTPlayer.pauseVideo(); } catch (e) { console.warn('pauseVideo falhou', e); }
+    setPlayButtonState('paused');
+    isPlaying = false;
+    console.debug('sync on pause', progressSec);
+  }
+
+  // Continua tocando normal (sem drift correction contínuo) quando o servidor está tocando
+  if (typeof data.is_playing === 'boolean' && data.is_playing === true && activeYTPlayer) {
+    if (!isPlaying) {
+      unlockYTPlayers();
+      try { activeYTPlayer.playVideo(); } catch (e) { console.warn('playVideo falhou', e); }
+      setPlayButtonState('playing');
+      isPlaying = true;
     }
   }
 
-  // Sincroniza o tempo do vídeo com o Spotify, compensando latência (drift > 0.8s)
-  if (activeYTPlayer && typeof activeYTPlayer.seekTo === 'function' && !Number.isNaN(progressSec)) {
-    try {
-      const currentTimeYT = activeYTPlayer.getCurrentTime ? activeYTPlayer.getCurrentTime() : 0;
-      const drift = Math.abs(currentTimeYT - progressSec);
-      if (drift > 0.75 || lastSyncedVideoId !== activeVideoId) {
-        activeYTPlayer.seekTo(progressSec, true);
-        lastSyncedVideoId = activeVideoId;
-        console.debug('seekTo sync', {progressSec, currentTimeYT, drift, activeVideoId});
-      }
-    } catch (err) {
-      console.warn('seekTo falhou', err);
-    }
+  // Ajuste de sync manual quando o usuário pula posição no controle
+  if (userSeeked && activeYTPlayer && typeof activeYTPlayer.seekTo === 'function' && !Number.isNaN(progressSec) && activeVideoId === serverVideoId) {
+    try { activeYTPlayer.seekTo(progressSec, true); } catch (e) { console.warn('user seek sync falhou', e); }
+    userSeeked = false;
+    console.debug('sync on user seek', progressSec);
+  }
+
+  // Final da música: faz um sync 4s antes do fim (se houver duração válida)
+  if (data.is_playing && duration > 0 && duration - progressSec <= 4 && !preEndSyncDone && activeYTPlayer && typeof activeYTPlayer.seekTo === 'function') {
+    try { activeYTPlayer.seekTo(progressSec, true); } catch (e) { console.warn('pre-end sync falhou', e); }
+    preEndSyncDone = true;
+    console.debug('pre-end sync', progressSec);
   }
 
   // Fila e ouvintes
@@ -692,7 +717,13 @@ progress.addEventListener('input', () => {
   const duration = activeYTPlayer.getDuration();
   if (!duration) return;
   const target = (progress.value / 100) * duration;
-  activeYTPlayer.seekTo(target, true);
+  userSeeked = true;
+  try {
+    activeYTPlayer.seekTo(target, true);
+  } catch (e) {
+    console.warn('user seekTo falhou', e);
+  }
+  console.debug('usuario pulo para', target);
 });
 
 playPauseBtn.addEventListener('click', togglePlay);
@@ -741,7 +772,16 @@ volumeBtn.addEventListener('click', () => {
 });
 
 volumeSlider.addEventListener('input', () => {
-  audio.volume = volumeSlider.value;
+  const value = Number(volumeSlider.value);
+  if (!Number.isNaN(value)) {
+    audio.volume = value;
+    if (activeYTPlayer && typeof activeYTPlayer.setVolume === 'function') {
+      activeYTPlayer.setVolume(Math.round(value * 100));
+    }
+    if (standbyYTPlayer && typeof standbyYTPlayer.setVolume === 'function') {
+      standbyYTPlayer.setVolume(Math.round(value * 100));
+    }
+  }
 });
 
 settingsBtn.addEventListener('click', () => {
