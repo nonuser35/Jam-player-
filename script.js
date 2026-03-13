@@ -433,7 +433,7 @@ async function fetchServerStatus() {
             throw new Error('Servidor Offline');
         }
         const payload = await resp.json();
-        console.debug('fetchServerStatus payload:', payload);
+// console.debug('fetchServerStatus payload:', payload);
         updateFromServerPayload(payload);
         setConnectionStatus(true, 'Online');
     } catch (error) {
@@ -454,7 +454,7 @@ function renderUpcoming(queue) {
 function updateFromServerPayload(data) {
   if (!data || typeof data !== 'object') return;
 
-  console.debug('Payload:', { video_id: data.video_id, progress: data.progress, is_playing: data.is_playing });
+// console.debug('Payload:', { video_id: data.video_id, progress: data.progress, is_playing: data.is_playing });
 
   lastPayload = data;
 
@@ -513,7 +513,7 @@ function updateFromServerPayload(data) {
   }
 
   // SEM SYNC: player livre
-  if (timeDiff > 1) console.debug(`⏸️ No sync (diff ${timeDiff.toFixed(1)}s): player livre`);
+  if (timeDiff > 1) console.log(`⏸️ No sync (diff ${timeDiff.toFixed(1)}s): player livre`);
 
   // Play/pause DESABILITADO (evita conflitos server)
   /*
