@@ -422,80 +422,53 @@ function startServerSync() {
   setInterval(fetchServerStatus, 1000);
 }
 
-async function updateFromServerPayload(payload) {
-  lastPayload = payload;
-  serverStatusText.textContent = `Servidor: ${payload.track_name || 'desconhecido'} - ${payload.artist_name || 'desconhecido'}`;
-  statusFile.textContent = `Listeners: ${payload.listeners || 0} | Latency: ${latencyMs} ms`;
+function renderUpcoming(queue) {
+  renderQueue(queue);
+}
 
-  if (Array.isArray(payload.usuarios)) renderListeners(payload.usuarios);
-  if (Array.isArray(payload.fila)) renderQueue(payload.fila);
+async function updateFromServerPayload(data) {
+  lastPayload = data;
 
-  if (payload.track_name && payload.artist_name) {
-    updateTrackInfo({
-      title: payload.track_name,
-      artist: payload.artist_name,
-      cover: payload.cover || currentTrack.cover,
-      audio: payload.audio || currentTrack.audio,
-      lyrics: currentTrack.lyrics
-    });
+  // Identificadores DOM
+  trackTitle.textContent = data.track_name || 'Sem música';
+  trackArtist.textContent = data.artist_name || 'Artista desconhecido';
+
+  if (data.cover) {
+    if (albumArt.src !== data.cover) {
+      albumArt.src = data.cover;
+    }
+    bgImage.style.backgroundImage = `url('${data.cover}')`;
   }
 
-  if (payload.command === 'pause') {
-    if (activeYTPlayer) activeYTPlayer.pauseVideo();
+  // Lógica de progresso
+  const duration = Number(data.duration) || 0;
+  const progressSec = Number(data.progress) || 0;
+  const progressPercent = duration > 0 ? Math.min(100, Math.max(0, (progressSec / duration) * 100)) : 0;
+  progress.value = progressPercent;
+  currentTime.textContent = formatTime(progressSec);
+  durationTime.textContent = formatTime(duration);
+
+  // Letras sincronizadas
+  lyricsLine.textContent = data.current_lyric && typeof data.current_lyric === 'string' && data.current_lyric.trim() !== ''
+    ? data.current_lyric
+    : 'Aguardando letra...';
+
+  // Estado de reprodução
+  if (data.is_playing === false) {
+    albumArt.style.opacity = '0.6';
     setPlayButtonState('paused');
     isPlaying = false;
-    return;
-  }
-
-  if (payload.command === 'play' || payload.command === 'resume') {
-    setPlayButtonState('loading');
-    await measureLatency();
-    const desiredProgress = (payload.progress || 0) + latencyMs / 2000;
-
-    if (typeof payload.video_id === 'string' && payload.video_id !== currentTrack.videoId) {
-      currentTrack.videoId = payload.video_id;
-      activeVideoId = payload.video_id;
-      if (activeYTPlayer && ytPlayerReady.player1 && ytPlayerReady.player2) {
-        activeYTPlayer.loadVideoById({ videoId: activeVideoId, startSeconds: desiredProgress });
-      }
-    }
-
-    if (payload.duration && activeYTPlayer && activeYTPlayer.seekTo) {
-      try {
-        activeYTPlayer.seekTo(desiredProgress, true);
-      } catch (err) {
-        console.warn('seek fail', err);
-      }
-    }
-
-    if (activeYTPlayer) {
-      activeYTPlayer.unMute();
-      activeYTPlayer.playVideo();
-    }
-
-    setPlayButtonState('playing');
-    isPlaying = true;
-  }
-
-  if (payload.next_video_id) {
-    preloadNextVideo(payload.next_video_id);
-  }
-
-  if (payload.duration && payload.progress >= (payload.duration - 0.5) && standbyVideoId) {
-    if (!transitionSwapped) {
-      swapToStandbyPlayer();
+  } else {
+    albumArt.style.opacity = '1';
+    if (data.is_playing === true) {
       setPlayButtonState('playing');
       isPlaying = true;
     }
   }
 
-  if (payload.duration && payload.progress >= (payload.duration - 4)) {
-    const currentSecs = activeYTPlayer && activeYTPlayer.getCurrentTime ? activeYTPlayer.getCurrentTime() : 0;
-    const offset = ((payload.progress + latencyMs / 2000) - currentSecs);
-    const adjust = Math.max(0.95, Math.min(1.05, 1 + (offset / 7)));
-    if (!isNaN(adjust)) setPlaybackRateForActive(adjust);
-  } else {
-    setPlaybackRateForActive(1);
+  // Atualiza próximas músicas
+  if (Array.isArray(data.fila)) {
+    renderUpcoming(data.fila);
   }
 }
 
