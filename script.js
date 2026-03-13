@@ -495,8 +495,8 @@ function updateFromServerPayload(data) {
     return;
   }
 
-  // ===== SYNC #3: Despause SÓ se YT PAUSED =====
-  if (serverPlaying && !lastServerIsPlaying && activeYTPlayer.getPlayerState() !== 1) {
+  // ===== SYNC #3 SEMPRE no despause (fix inicial) =====
+  if (serverPlaying && !lastServerIsPlaying) {
     console.log(`🔄 Sync #3 (despause): ${normalizedProgress.toFixed(1)}s`);
     activeYTPlayer.seekTo(normalizedProgress, true);
     lastServerIsPlaying = true;
@@ -534,8 +534,7 @@ function updateFromServerPayload(data) {
   if (Array.isArray(data.usuarios)) renderListeners(data.usuarios);
 
   lastServerProgress = normalizedProgress;
-  if (!serverPlaying) lastServerIsPlaying = false;  // ✅ Reset para próximo despause
-  else lastServerIsPlaying = serverPlaying;
+  lastServerIsPlaying = serverPlaying;
 }
 
 function updateTrackInfo(track) {
