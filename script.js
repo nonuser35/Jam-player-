@@ -75,6 +75,7 @@ function onYouTubeIframeAPIReady() {
 
 function onReady() {
   console.log('🎵 Player pronto');
+  startTimeUpdate();
 }
 
 function onStateChange(e) {
@@ -83,8 +84,10 @@ function onStateChange(e) {
 
 function loadVideo(id) {
   console.log('🎵 Carregar:', id);
+  stopTimeUpdate();
   ytPlayer.loadVideoById(id);
   currentVideoId = id;
+  setTimeout(startTimeUpdate, 1000);  // Após load
 }
 
 // ===== SERIDOR UI/STATUS (SEM SYNC PLAYER) =====
@@ -176,12 +179,34 @@ cancelProfile.onclick = () => settingsPanel.classList.add('hidden');
 // ===== INITS =====
 initApiBase();
 if (isValidApi()) syncInterval = setInterval(fetchStatus, 2000);
+startTimeUpdate();
 
-// Tempo player (liso)
-setInterval(() => {
-  if (ytPlayer) {
-    const current = ytPlayer.getCurrentTime() || 0;
-    const duration = ytPlayer.getDuration() || 0;
-    if (duration > 0) updateProgress(current, duration);
+// Tempo player liso - só após vídeo carregado
+let timeInterval = null;
+let isVideoLoaded = false;
+
+function startTimeUpdate() {
+  if (timeInterval) clearInterval(timeInterval);
+  isVideoLoaded = false;
+  timeInterval = setInterval(() => {
+    if (ytPlayer && ytPlayer.getVideoData) {
+      const data = ytPlayer.getVideoData();
+      if (data && data.video_id) isVideoLoaded = true;
+      
+      if (isVideoLoaded) {
+        const current = ytPlayer.getCurrentTime();
+        const duration = ytPlayer.getDuration();
+        if (duration > 0 && !isNaN(current)) {
+          updateProgress(current, duration);
+        }
+      }
+    }
+  }, 250);
+}
+
+function stopTimeUpdate() {
+  if (timeInterval) {
+    clearInterval(timeInterval);
+    timeInterval = null;
   }
-}, 500);
+}
