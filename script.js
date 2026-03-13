@@ -384,8 +384,12 @@ async function fetchServerStatus() {
             headers: { 'ngrok-skip-browser-warning': 'true' }
         });
 
-        if (!resp.ok) throw new Error('Servidor Offline');
+        if (!resp.ok) {
+            console.warn('fetchServerStatus: status HTTP', resp.status, resp.statusText);
+            throw new Error('Servidor Offline');
+        }
         const payload = await resp.json();
+        console.debug('fetchServerStatus payload:', payload);
         updateFromServerPayload(payload);
         setConnectionStatus(true, 'Online');
     } catch (error) {
@@ -405,6 +409,8 @@ function renderUpcoming(queue) {
 
 async function updateFromServerPayload(data) {
   if (!data || typeof data !== 'object') return;
+
+  console.debug('updateFromServerPayload called:', data);
 
   lastPayload = data;
 
