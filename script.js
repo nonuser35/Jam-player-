@@ -1,166 +1,100 @@
-// JAM Spotify Player - Sync SIMPLES do zero
-// Site abre → carrega video+progress server → toca → sync 1s se diff>2s
+// JAM Player - SYNC ÚNICO INICIAL
+// Abre → 1x sync tempo Spotify → toca → livre (barra anima)
 
-const app = document.getElementById('app');
-const albumArt = document.getElementById('albumArt');
 const trackTitle = document.getElementById('trackTitle');
 const trackArtist = document.getElementById('trackArtist');
-const lyricsLine = document.getElementById('lyricsLine');
+const albumArt = document.getElementById('albumArt');
 const progress = document.getElementById('progress');
 const currentTime = document.getElementById('currentTime');
 const durationTime = document.getElementById('durationTime');
 const playPauseBtn = document.getElementById('playPauseBtn');
-const nextBtn = document.getElementById('nextBtn');
-const prevBtn = document.getElementById('prevBtn');
-const settingsPanel = document.getElementById('settingsPanel');
 const apiLinkInput = document.getElementById('apiLinkInput');
 const connectBtn = document.getElementById('connectBtn');
 
-let API_BASE = localStorage.getItem('jamApiLink') || 'http://localhost:8000';
-let activeYTPlayer = null;
-let lastPayload = null;
-let isPlaying = false;
-let userSeeked = false;
-
-// ========== YT PLAYER ==========
+let API_BASE = localStorage.getItem('jamApiLink') || '';
 let ytPlayer = null;
+let synced = false;  // ÚNICO sync
+
 function onYouTubeIframeAPIReady() {
   ytPlayer = new YT.Player('player1', {
     width: '100%', height: '100%',
-    playerVars: { autoplay: 0, controls: 0, disablekb: 1, rel: 0 },
-    events: {
-      'onReady': onPlayerReady,
-      'onStateChange': onPlayerStateChange,
-      'onError': onPlayerError
-    }
+    playerVars: { autoplay: 0, controls: 0 },
+    events: { 'onReady': onPlayerReady }
   });
 }
 
-function onPlayerReady(event) {
-  console.log('🎥 YT pronto - sync iniciando');
-  syncFromServer();
+function onPlayerReady() {
+  console.log('Player pronto - sync único');
+  syncOnce();
 }
 
-function onPlayerStateChange(event) {
-  if (event.data == YT.PlayerState.ENDED) playNext();
-}
-
-function onPlayerError(event) {
-  console.log('YouTube erro', event.data);
-  playNext();
-}
-
-// ========== SYNC SERVER ==========
-function getStatusEndpoint() { return `${API_BASE}/status`; }
-
-async function syncFromServer() {
+async function syncOnce() {
+  if (synced) return;
+  
   try {
-    const res = await fetch(getStatusEndpoint());
+    const res = await fetch(`${API_BASE}/status`);
     const data = await res.json();
-    console.log('📡 Server:', data.video_id, data.progress);
-    
-    lastPayload = data;
+    console.log('🔄 Sync único:', data.video_id, data.progress/1000 + 's');
     
     // UI
-    trackTitle.textContent = data.track_name || '';
-    trackArtist.textContent = data.artist_name || '';
-    albumArt.src = data.cover || '';
+    trackTitle.textContent = data.track_name;
+    trackArtist.textContent = data.artist_name;
+    albumArt.src = data.cover;
     
-    const progress = Number(data.progress) / 1000;  // ms→s
-    const duration = Number(data.duration) / 1000;
+    // SYNC ÚNICO
+    const progress = Number(data.progress) / 1000;
+    ytPlayer.loadVideoById({
+      videoId: data.video_id,
+      startSeconds: progress  // Tempo exato Spotify
+    });
     
-    // SYNC 1: NOVO VÍDEO
-    if (data.video_id && data.video_id != activeVideoId) {
-      console.log('🔄 Sync NOVO:', data.video_id, progress.toFixed(1)+'s');
-      activeVideoId = data.video_id;
-      ytPlayer.loadVideoById({videoId: data.video_id, startSeconds: progress});
-      if (data.is_playing) ytPlayer.playVideo();
-      return;
-    }
+    if (data.is_playing) ytPlayer.playVideo();
     
-    // SYNC 2: DIFF >2s
-    const current = ytPlayer.getCurrentTime();
-    const diff = Math.abs(current - progress);
-    if (diff > 2) {
-      console.log('🔄 Sync DIFF', diff.toFixed(1)+'s →', progress.toFixed(1));
-      ytPlayer.seekTo(progress, true);
-    }
-    
-    // SYNC 3: PLAY/PAUSE
-    const playing = ytPlayer.getPlayerState() == 1;
-    if (data.is_playing && !playing) ytPlayer.playVideo();
-    if (!data.is_playing && playing) ytPlayer.pauseVideo();
-    
-    updateProgress(current, duration);
+    synced = true;
+    console.log('✅ Sync único feito - player livre');
     
   } catch (e) {
     console.error('Sync erro:', e);
+    setTimeout(syncOnce, 2000);  // Retry 1x
   }
 }
 
-// ========== BARRA PROGRESSO ==========
-function updateProgress(current, duration) {
-  const percent = duration ? (current / duration) * 100 : 0;
-  progress.value = percent;
-  currentTime.textContent = formatTime(current);
-  durationTime.textContent = formatTime(duration);
-}
-
+// Barra ANIMA LIVRE (sempre)
 setInterval(() => {
   if (ytPlayer) {
     const current = ytPlayer.getCurrentTime();
     const duration = ytPlayer.getDuration();
-    updateProgress(current, duration);
+    const percent = duration ? (current / duration) * 100 : 0;
+    progress.value = percent;
+    currentTime.textContent = formatTime(current);
+    durationTime.textContent = formatTime(duration);
   }
 }, 250);
 
-// User seek
+// User seek OK
 progress.addEventListener('input', () => {
-  userSeeked = true;
   const duration = ytPlayer.getDuration();
   ytPlayer.seekTo((progress.value / 100) * duration);
 });
 
-// ========== CONTROLES ==========
+// Play/pause NORMAL
 playPauseBtn.addEventListener('click', () => {
-  if (ytPlayer.getPlayerState() == 1) {
-    ytPlayer.pauseVideo();
-    sendCommand('pause');
-  } else {
-    ytPlayer.playVideo();
-    sendCommand('play');
-  }
+  if (ytPlayer.getPlayerState() == 1) ytPlayer.pauseVideo();
+  else ytPlayer.playVideo();
 });
-
-nextBtn.addEventListener('click', () => sendCommand('next'));
-prevBtn.addEventListener('click', () => sendCommand('prev'));
-
-function sendCommand(cmd) {
-  fetch(`${getStatusEndpoint()}/command`, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({command: cmd})
-  });
-}
 
 function formatTime(s) {
-  const m = Math.floor(s / 60);
-  const sec = Math.floor(s % 60);
-  return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+  return `${Math.floor(s/60).toString().padStart(2,'0')}:${Math.floor(s%60).toString().padStart(2,'0')}`;
 }
 
-// ========== SETTINGS ==========
-connectBtn.addEventListener('click', async () => {
+// Settings
+connectBtn.onclick = () => {
   API_BASE = apiLinkInput.value;
   localStorage.setItem('jamApiLink', API_BASE);
-  console.log('🌐 API:', API_BASE);
-  syncFromServer();
-});
+  synced = false;
+  syncOnce();
+};
 
 // Init
-function init() {
-  syncFromServer();
-  setInterval(syncFromServer, 1000);
-}
-init();
+syncOnce();
 
