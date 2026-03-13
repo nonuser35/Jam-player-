@@ -98,7 +98,7 @@ let pendingProgress = 0;
 let lastServerIsPlaying = false;
 let userSeeked = false;
 let syncRetries = 0;
-let retrySyncInterval = null;
+// ✅ Removido retrySyncInterval (não usado, evita TS error)
 
 const apiLinkInput = document.getElementById('apiLinkInput');
 const connectBtn = document.getElementById('connectBtn');
@@ -240,8 +240,7 @@ function initializeYTPlayers() {
 
   setActiveVisual(activeYTPlayer === ytPlayer1 ? 'player1' : 'player2');
   
-  // Start retry sync
-  startRetrySync();
+  // ✅ Removido: sem retrySync (zero jitters)
 }
 
 function setActiveVisual(playerId) {
@@ -733,8 +732,7 @@ audio.addEventListener('ended', () => {
   }
 });
 
-// ✅ Removido retrySyncInterval (zero jitters)
-let retrySyncInterval = null; // Mantido mas nunca usado
+// ✅ Sem retrySync (zero jitters, código limpo)
 
 // Tab control inside settings panel
 const sectionButtons = document.querySelectorAll('.section-btn');
