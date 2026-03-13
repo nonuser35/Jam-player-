@@ -441,6 +441,11 @@ async function updateFromServerPayload(data) {
     }
   }
 
+  // Autoplay inicial: desbloquear em primeiro trigger se o servidor pedir playback
+  if (data.is_playing && !isYTUnlocked) {
+    unlockYTPlayers();
+  }
+
   // Play / pause a partir do servidor
   if (typeof data.is_playing === 'boolean' && activeYTPlayer) {
     if (data.is_playing) {
