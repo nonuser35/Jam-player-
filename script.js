@@ -90,17 +90,15 @@ let isSyncLoading = false;
 let latencyMs = 0;
 let lastPayload = null;
 let lastServerVideoId = null;
-let lastSyncedVideoId = null;
 let lastServerProgress = 0;
 let lastServerTimestamp = 0;
 let users = [];
 let pendingVideoId = null;
 let pendingProgress = 0;
-let isInitialSyncDone = false;
-let preEndSyncDone = false;
 let lastServerIsPlaying = false;
 let userSeeked = false;
-let didSeekOnTrack = false;
+let syncRetries = 0;
+let retrySyncInterval = null;
 
 const apiLinkInput = document.getElementById('apiLinkInput');
 const connectBtn = document.getElementById('connectBtn');
@@ -212,45 +210,38 @@ function onYouTubeIframeAPIReady() {
 
 function initializeYTPlayers() {
   if (!ytPlayerReady.player1 || !ytPlayerReady.player2) return;
+  
   activeYTPlayer = ytPlayer1;
   standbyYTPlayer = ytPlayer2;
   activeYTPlayer.setVolume(100);
   standbyYTPlayer.setVolume(100);
   standbyYTPlayer.mute();
   standbyYTPlayer.pauseVideo();
-  if (activeVideoId) {
-    activeYTPlayer.cueVideoById(activeVideoId);
-  }
-  if (standbyVideoId) {
-    standbyYTPlayer.cueVideoById(standbyVideoId);
-  }
 
-  // Se há pendingVideoId, carregar com progresso
+  console.log('🎥 YT Players inicializados');
+
+  // Handle pending
   if (pendingVideoId) {
-    console.debug('initializeYTPlayers: loading pendingVideoId', pendingVideoId, 'at', pendingProgress);
+    console.log('🚀 Loading pending:', pendingVideoId, 'at', pendingProgress);
     activeVideoId = pendingVideoId;
-    if (pendingProgress > 0) {
-      activeYTPlayer.loadVideoById({ videoId: pendingVideoId, startSeconds: pendingProgress });
-    } else {
-      activeYTPlayer.loadVideoById(pendingVideoId);
-    }
+    activeYTPlayer.loadVideoById({ videoId: pendingVideoId, startSeconds: pendingProgress });
+    
+    // FORCE SYNC após init
+    setTimeout(() => {
+      if (activeYTPlayer && pendingProgress > 0) {
+        activeYTPlayer.seekTo(pendingProgress, true);
+        console.log('✅ Init force seek:', pendingProgress);
+      }
+    }, 800);
+    
     pendingVideoId = null;
     pendingProgress = 0;
-    didSeekOnTrack = false;
-    isInitialSyncDone = false; // Aguardamos o primeiro payload para ajustes finos
   }
 
-  // Removido: não usar lastPayload aqui, pois pode ser null no momento
-
-  // Se o servidor estava tocando, iniciar playback após load (mas só se lastPayload disponível)
-  if (lastPayload && lastPayload.is_playing === true && activeVideoId === (lastPayload.video_id ? String(lastPayload.video_id).trim() : null)) {
-    unlockYTPlayers();
-    try { activeYTPlayer.playVideo(); } catch (e) { console.warn('playVideo falhou no initialize', e); }
-    setPlayButtonState('playing');
-    isPlaying = true;
-  }
-
-  setActiveVisual('player1');
+  setActiveVisual(activeYTPlayer === ytPlayer1 ? 'player1' : 'player2');
+  
+  // Start retry sync
+  startRetrySync();
 }
 
 function setActiveVisual(playerId) {
@@ -461,178 +452,95 @@ function renderUpcoming(queue) {
   renderQueue(queue);
 }
 
-async function updateFromServerPayload(data) {
+function updateFromServerPayload(data) {
   if (!data || typeof data !== 'object') return;
 
-  console.debug('updateFromServerPayload called:', data);
+  console.debug('updateFromServerPayload:', { video_id: data.video_id, progress: data.progress, is_playing: data.is_playing });
 
   lastPayload = data;
 
-  // Campos do servidor (fonte de verdade)
+  // UI básica
   trackTitle.textContent = data.track_name || 'Sem música';
   trackArtist.textContent = data.artist_name || 'Artista desconhecido';
-
   if (data.cover) {
     albumArt.src = data.cover;
     bgImage.style.backgroundImage = `url('${data.cover}')`;
   }
+  lyricsLine.textContent = data.current_lyric || 'Aguardando letra...';
 
-  const duration = normalizeSeconds(data.duration);
-  const serverProgress = normalizeSeconds(data.progress);
-  const progressSec = (data.timestamp && !Number.isNaN(Number(data.timestamp)))
-    ? getServerProgressWithLatency(data)
-    : serverProgress;
-
-  // Certifica que progressSec não exceda duração + 1s por causa de valores estranhos
-  const normalizedProgress = duration > 0 ? Math.min(progressSec, duration + 1) : progressSec;
-
-  console.debug('Payload progress:', data.progress, 'normalized:', normalizedProgress, 'duration:', duration);
-
-  // Forçamos a leitura do estado de playing antes do uso, para não usar variável indefinida.
-  const serverPlaying = (typeof data.is_playing === 'boolean') ? data.is_playing : null;
-
-  // Ajusta tempo da barra usando servidor até o player estiver pronto ou em pausa.
-  const shouldUseServerProgress = !activeYTPlayer || !ytPlayerReady.player1 || !ytPlayerReady.player2 || !isInitialSyncDone || serverPlaying === false;
-  if (shouldUseServerProgress) {
-    updateProgressDisplay(normalizedProgress, duration);
-  }
-
-  lyricsLine.textContent = (typeof data.current_lyric === 'string' && data.current_lyric.trim() !== '')
-    ? data.current_lyric
-    : 'Aguardando letra...';
-
-  // Gerenciamento de double-buffering (crossfade)
   const serverVideoId = data.video_id ? String(data.video_id).trim() : null;
-  const nowServerTimestamp = getServerTimestampMs(data);
+  const duration = normalizeSeconds(data.duration);
+  const normalizedProgress = duration > 0 ? Math.min(getServerProgressWithLatency(data), duration + 1) : 0;
+  const serverPlaying = !!data.is_playing;
 
-  // Forçar carregamento inicial se player pronto e vídeo não carregado ou diferente
-  if (activeYTPlayer && ytPlayerReady.player1 && ytPlayerReady.player2 && (!activeVideoId || activeVideoId !== serverVideoId)) {
-    console.debug('Forçando carregamento inicial:', serverVideoId, 'at', normalizedProgress);
+  console.debug('Sync data:', { serverVideoId, normalizedProgress, duration, serverPlaying });
+
+  // 1. NOVO VÍDEO: Load + force seek em 500ms
+  if (serverVideoId && serverVideoId !== activeVideoId && activeYTPlayer && ytPlayerReady.player1 && ytPlayerReady.player2) {
+    console.log('🔄 NOVO VÍDEO:', serverVideoId, 'seek to', normalizedProgress);
     activeVideoId = serverVideoId;
     activeYTPlayer.loadVideoById({ videoId: serverVideoId, startSeconds: normalizedProgress });
-    isInitialSyncDone = false;
-    preEndSyncDone = false;
-  }
-
-  const serverTrackChanged = serverVideoId && serverVideoId !== activeVideoId;
-  const sameTrack = serverVideoId && serverVideoId === activeVideoId;
-
-  const timeSinceLast = lastServerTimestamp ? Math.max((nowServerTimestamp - lastServerTimestamp) / 1000, 0) : 1;
-  const expectedProgress = lastServerProgress + timeSinceLast;
-  const jumpOffset = (sameTrack && lastServerProgress > 0) ? Math.abs(normalizedProgress - expectedProgress) : 0;
-
-  // 1) Troca de faixa (nova música) ou carregamento inicial
-  if (serverVideoId) {
-    if (!activeYTPlayer || !standbyYTPlayer || !ytPlayerReady.player1 || !ytPlayerReady.player2) {
-      pendingVideoId = serverVideoId;
-      pendingProgress = normalizedProgress;
-    } else if (!activeVideoId || serverTrackChanged) {
-      if (serverTrackChanged) {
-        standbyVideoId = serverVideoId;
-        lastServerVideoId = serverVideoId;
-
-        standbyYTPlayer.mute();
-        standbyYTPlayer.cueVideoById({ videoId: serverVideoId, startSeconds: normalizedProgress || 0 });
-        standbyYTPlayer.pauseVideo();
-
-        swapToStandbyPlayer();
-        activeVideoId = serverVideoId;
-        standbyVideoId = null;
-      } else {
-        activeVideoId = serverVideoId;
-        lastServerVideoId = serverVideoId;
-        activeYTPlayer.loadVideoById({ videoId: serverVideoId, startSeconds: normalizedProgress || 0 });
-      }
-
-      pendingProgress = normalizedProgress;
-      isInitialSyncDone = false;
-      preEndSyncDone = false;
-    }
-  }
-
-  // 2) Sync inicial com o servidor quando o player estiver pronto para o mesmo track
-  const isReadyForInitialSync = serverVideoId && !isInitialSyncDone && activeYTPlayer && typeof activeYTPlayer.seekTo === 'function' && !serverTrackChanged;
-  if (isReadyForInitialSync) {
-    try {
-      activeYTPlayer.seekTo(normalizedProgress, true);
-      console.debug('initial sync:', normalizedProgress);
-      isInitialSyncDone = true;
-      lastSyncedVideoId = activeVideoId;
-    } catch (err) {
-      console.warn('initial sync seekTo falhou', err);
-    }
-  }
-
-  const resumedFromPause = serverPlaying === true && lastServerIsPlaying === false;
-  const justPaused = serverPlaying === false && lastServerIsPlaying === true;
-  const jumpSync = sameTrack && serverPlaying === true && lastServerIsPlaying === true && jumpOffset > 8;
-
-  if (resumedFromPause || justPaused || jumpSync) {
-    if (activeYTPlayer && typeof activeYTPlayer.seekTo === 'function') {
-      try {
+    
+    // FORCE SEEK após carregamento
+    setTimeout(() => {
+      if (activeYTPlayer && typeof activeYTPlayer.seekTo === 'function') {
         activeYTPlayer.seekTo(normalizedProgress, true);
-      } catch (e) {
-        console.warn('sync on control event falhou', e);
+        console.log('✅ Force seek após load:', normalizedProgress);
       }
+    }, 500);
+    
+    // Preload próximo na standby
+    if (standbyYTPlayer && data.next_video_id) {
+      standbyYTPlayer.cueVideoById(data.next_video_id);
+    }
+    pendingVideoId = null;
+    pendingProgress = 0;
+  }
+
+  // 2. MESMO VÍDEO: Sync contínuo se diff > 1s
+  if (serverVideoId === activeVideoId && activeYTPlayer && typeof activeYTPlayer.getCurrentTime === 'function') {
+    const currentTime = activeYTPlayer.getCurrentTime() || 0;
+    const timeDiff = Math.abs(currentTime - normalizedProgress);
+    
+    if (timeDiff > 1) {  // Tolerância 1s
+      console.debug('🔄 Sync mesmo vídeo:', currentTime, '->', normalizedProgress, '(diff:', timeDiff, 's)');
+      activeYTPlayer.seekTo(normalizedProgress, true);
     }
   }
 
-  // 3) Pilha de estados de play/pause menos agressiva
-  if (serverPlaying !== null && activeYTPlayer) {
-    const currentYtState = typeof activeYTPlayer.getPlayerState === 'function' ? activeYTPlayer.getPlayerState() : null;
-    const ytIsPlaying = currentYtState === YT.PlayerState.PLAYING;
-
-    if (serverPlaying && !ytIsPlaying) {
+  // 3. Play/Pause sync
+  if (activeYTPlayer) {
+    const ytState = activeYTPlayer.getPlayerState();
+    const ytPlaying = ytState === YT.PlayerState.PLAYING;
+    
+    if (serverPlaying && !ytPlaying) {
       unlockYTPlayers();
-      try { activeYTPlayer.playVideo(); } catch (e) { console.warn('playVideo falhou', e); }
+      activeYTPlayer.playVideo();
       setPlayButtonState('playing');
       isPlaying = true;
-    } else if (!serverPlaying && ytIsPlaying) {
-      try { activeYTPlayer.pauseVideo(); } catch (e) { console.warn('pauseVideo falhou', e); }
+    } else if (!serverPlaying && ytPlaying) {
+      activeYTPlayer.pauseVideo();
       setPlayButtonState('paused');
       isPlaying = false;
     }
   }
 
-  // 4) Ajuste das seek para parada (evento do servidor)
-  if (justPaused && activeYTPlayer && typeof activeYTPlayer.getCurrentTime === 'function') {
-    const current = activeYTPlayer.getCurrentTime();
-    if (Math.abs(current - normalizedProgress) > 0.3) {
-      try { activeYTPlayer.seekTo(normalizedProgress, true); } catch (e) { console.warn('pause sync seekTo falhou', e); }
-    }
-    setPlayButtonState('paused');
-    isPlaying = false;
-    console.debug('sync on pause', normalizedProgress);
-  }
-
-  // 5) Caso o usuário altere progress manualmente
-  if (userSeeked && activeYTPlayer && typeof activeYTPlayer.seekTo === 'function' && activeVideoId === serverVideoId) {
-    try { activeYTPlayer.seekTo(normalizedProgress, true); } catch (e) { console.warn('user seek sync falhou', e); }
+  // 4. User seek override pelo servidor
+  if (userSeeked && serverVideoId === activeVideoId) {
+    activeYTPlayer.seekTo(normalizedProgress, true);
     userSeeked = false;
-    console.debug('sync on user seek', normalizedProgress);
   }
 
-  // 6) Resync final 4s antes do fim para garantir transição certa
-  if (serverPlaying && duration > 0 && duration - normalizedProgress <= 4 && !preEndSyncDone && activeYTPlayer) {
-    try { activeYTPlayer.seekTo(normalizedProgress, true); } catch (e) { console.warn('pre-end sync falhou', e); }
-    preEndSyncDone = true;
-    console.debug('pre-end sync (4s)', normalizedProgress);
-  }
-
-  // Atualiza estados de última consulta para próxima iteração
-  lastServerProgress = normalizedProgress;
-  lastServerTimestamp = nowServerTimestamp;
-  lastServerIsPlaying = serverPlaying;
-
-  // Fila e ouvintes
+  // Fila/Listeners
   const queue = Array.isArray(data.fila) ? data.fila : (Array.isArray(data.proximas) ? data.proximas : []);
   renderUpcoming(queue);
+  if (Array.isArray(data.usuarios)) renderListeners(data.usuarios);
 
-  if (Array.isArray(data.usuarios)) {
-    renderListeners(data.usuarios);
-  }
+  lastServerProgress = normalizedProgress;
+  lastServerTimestamp = getServerTimestampMs(data);
+  lastServerIsPlaying = serverPlaying;
 
-  setConnectionStatus(true, 'Sincronizado');
+  setConnectionStatus(true, `Sync ${syncRetries}s`);
 }
 
 function updateTrackInfo(track) {
@@ -774,19 +682,19 @@ function playPrev() {
 }
 
 function refreshProgressDisplay() {
-  const duration = activeYTPlayer && activeYTPlayer.getDuration ? activeYTPlayer.getDuration() : (lastPayload ? normalizeSeconds(lastPayload.duration) : 0);
-
-  // Caso ainda não tenha feito sync inicial ou esteja com o servidor pausado, não animar pela posição local.
-  if (!isInitialSyncDone || lastServerIsPlaying === false || !activeYTPlayer || !activeYTPlayer.getCurrentTime) {
-    if (lastPayload) {
-      const serverProgress = lastPayload.timestamp ? getServerProgressWithLatency(lastPayload) : normalizeSeconds(lastPayload.progress);
-      updateProgressDisplay(Math.min(serverProgress, duration), duration);
-    }
-    return;
-  }
-
+  if (!activeYTPlayer) return;
+  
+  const duration = activeYTPlayer.getDuration() || (lastPayload ? normalizeSeconds(lastPayload.duration) : 0);
   const current = activeYTPlayer.getCurrentTime ? activeYTPlayer.getCurrentTime() : 0;
-  updateProgressDisplay(current, duration);
+  
+  // Após sync inicial OU sempre se servidor pausado, usar server time
+  if (lastServerIsPlaying === false || !lastPayload) {
+    const serverProgress = lastPayload ? getServerProgressWithLatency(lastPayload) : current;
+    updateProgressDisplay(serverProgress, duration);
+  } else {
+    // Player time anima a barra suavemente
+    updateProgressDisplay(current, duration);
+  }
 }
 
 setInterval(refreshProgressDisplay, 400);
@@ -828,6 +736,37 @@ audio.addEventListener('ended', () => {
     playNext();
   }
 });
+
+// === RETRY SYNC FUNCTION ===
+function startRetrySync() {
+  if (retrySyncInterval) clearInterval(retrySyncInterval);
+  
+  retrySyncInterval = setInterval(() => {
+    if (!activeYTPlayer || !lastPayload) return;
+    
+    const serverVideoId = lastPayload.video_id ? String(lastPayload.video_id).trim() : null;
+    if (serverVideoId !== activeVideoId) return;
+    
+    const duration = activeYTPlayer.getDuration() || 0;
+    const normalizedProgress = getServerProgressWithLatency(lastPayload);
+    const current = activeYTPlayer.getCurrentTime() || 0;
+    const diff = Math.abs(current - normalizedProgress);
+    
+    if (diff > 2 && syncRetries < 10) {  // Retry até 10x se diff > 2s
+      console.log(`🔄 Retry #${++syncRetries}: ${current.toFixed(1)}s -> ${normalizedProgress.toFixed(1)}s (diff: ${diff.toFixed(1)}s)`);
+      activeYTPlayer.seekTo(normalizedProgress, true);
+    } else if (diff <= 2) {
+      syncRetries = 0;  // Reset se sync OK
+    }
+  }, 2000);
+}
+
+function stopRetrySync() {
+  if (retrySyncInterval) {
+    clearInterval(retrySyncInterval);
+    retrySyncInterval = null;
+  }
+}
 
 // Tab control inside settings panel
 const sectionButtons = document.querySelectorAll('.section-btn');
