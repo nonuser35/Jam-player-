@@ -225,6 +225,7 @@ function initializeYTPlayers() {
     standbyYTPlayer.cueVideoById(standbyVideoId);
   }
 
+  // Se há pendingVideoId, carregar com progresso
   if (pendingVideoId) {
     console.debug('initializeYTPlayers: loading pendingVideoId', pendingVideoId, 'at', pendingProgress);
     activeVideoId = pendingVideoId;
@@ -237,14 +238,22 @@ function initializeYTPlayers() {
     pendingProgress = 0;
     didSeekOnTrack = false;
     isInitialSyncDone = false; // Aguardamos o primeiro payload para ajustes finos
+  } else if (lastPayload && lastPayload.video_id) {
+    // Se não há pending, mas há lastPayload, usar para inicializar
+    const serverVideoId = String(lastPayload.video_id).trim();
+    const serverProgress = lastPayload.timestamp ? getServerProgressWithLatency(lastPayload) : normalizeSeconds(lastPayload.progress);
+    console.debug('initializeYTPlayers: using lastPayload for initial load', serverVideoId, 'at', serverProgress);
+    activeVideoId = serverVideoId;
+    if (serverProgress > 0) {
+      activeYTPlayer.loadVideoById({ videoId: serverVideoId, startSeconds: serverProgress });
+    } else {
+      activeYTPlayer.loadVideoById(serverVideoId);
+    }
+    isInitialSyncDone = false;
   }
 
-  // Se o servidor estava tocando antes do ready e já temos payload, tentar iniciar imediatamente
+  // Se o servidor estava tocando, iniciar playback após load
   if (lastPayload && lastPayload.is_playing === true && activeVideoId === (lastPayload.video_id ? String(lastPayload.video_id).trim() : null)) {
-    if (lastPayload.progress !== undefined && activeYTPlayer && typeof activeYTPlayer.seekTo === 'function') {
-      const desired = lastPayload.timestamp ? getServerProgressWithLatency(lastPayload) : normalizeSeconds(lastPayload.progress);
-      try { activeYTPlayer.seekTo(desired, true); } catch (e) { console.warn('seekTo falhou no initialize', e); }
-    }
     unlockYTPlayers();
     try { activeYTPlayer.playVideo(); } catch (e) { console.warn('playVideo falhou no initialize', e); }
     setPlayButtonState('playing');
