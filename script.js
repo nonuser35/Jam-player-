@@ -95,6 +95,7 @@ let lastServerProgress = 0;
 let lastServerTimestamp = 0;
 let users = [];
 let pendingVideoId = null;
+let pendingProgress = 0;
 let isInitialSyncDone = false;
 let preEndSyncDone = false;
 let lastServerIsPlaying = false;
@@ -225,15 +226,25 @@ function initializeYTPlayers() {
   }
 
   if (pendingVideoId) {
-    console.debug('initializeYTPlayers: loading pendingVideoId', pendingVideoId);
+    console.debug('initializeYTPlayers: loading pendingVideoId', pendingVideoId, 'at', pendingProgress);
     activeVideoId = pendingVideoId;
-    activeYTPlayer.loadVideoById(pendingVideoId);
+    if (pendingProgress > 0) {
+      activeYTPlayer.loadVideoById({ videoId: pendingVideoId, startSeconds: pendingProgress });
+    } else {
+      activeYTPlayer.loadVideoById(pendingVideoId);
+    }
     pendingVideoId = null;
+    pendingProgress = 0;
     didSeekOnTrack = false;
+    isInitialSyncDone = false; // Aguardamos o primeiro payload para ajustes finos
   }
 
   // Se o servidor estava tocando antes do ready e já temos payload, tentar iniciar imediatamente
   if (lastPayload && lastPayload.is_playing === true && activeVideoId === (lastPayload.video_id ? String(lastPayload.video_id).trim() : null)) {
+    if (lastPayload.progress !== undefined && activeYTPlayer && typeof activeYTPlayer.seekTo === 'function') {
+      const desired = lastPayload.timestamp ? getServerProgressWithLatency(lastPayload) : normalizeSeconds(lastPayload.progress);
+      try { activeYTPlayer.seekTo(desired, true); } catch (e) { console.warn('seekTo falhou no initialize', e); }
+    }
     unlockYTPlayers();
     try { activeYTPlayer.playVideo(); } catch (e) { console.warn('playVideo falhou no initialize', e); }
     setPlayButtonState('playing');
@@ -504,6 +515,7 @@ async function updateFromServerPayload(data) {
   if (serverVideoId) {
     if (!activeYTPlayer || !standbyYTPlayer || !ytPlayerReady.player1 || !ytPlayerReady.player2) {
       pendingVideoId = serverVideoId;
+      pendingProgress = normalizedProgress;
     } else if (!activeVideoId || serverTrackChanged) {
       if (serverTrackChanged) {
         standbyVideoId = serverVideoId;
@@ -522,6 +534,7 @@ async function updateFromServerPayload(data) {
         activeYTPlayer.loadVideoById({ videoId: serverVideoId, startSeconds: normalizedProgress || 0 });
       }
 
+      pendingProgress = normalizedProgress;
       isInitialSyncDone = false;
       preEndSyncDone = false;
     }
