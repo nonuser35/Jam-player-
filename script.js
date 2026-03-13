@@ -478,17 +478,18 @@ function updateFromServerPayload(data) {
     console.log(`🔄 Sync #1 (novo vídeo): ${serverVideoId} → ${normalizedProgress.toFixed(1)}s`);
     activeVideoId = serverVideoId;
     activeYTPlayer.loadVideoById({ videoId: serverVideoId, startSeconds: normalizedProgress });
-    activeYTPlayer.seekTo(normalizedProgress, true);  // Imediato
+    setTimeout(() => activeYTPlayer.seekTo(normalizedProgress, true), 300);  // Após load
     pendingVideoId = null;
-    return;  // Prioridade alta
+    return;
   }
 
   if (!activeVideoId || !activeYTPlayer || serverVideoId !== activeVideoId) return;
 
   const currentTime = activeYTPlayer.getCurrentTime() || 0;
+  const timeDiff = Math.abs(currentTime - normalizedProgress);
 
-  // ===== SYNC #2: USER SEEK (diff >8s) =====
-  if (userSeeked && Math.abs(currentTime - normalizedProgress) > 8) {
+  // ===== SYNC #2: USER SEEK >8s =====
+  if (userSeeked && timeDiff > 8) {
     console.log(`🔄 Sync #2 (user seek>8s): ${currentTime.toFixed(1)}s → ${normalizedProgress.toFixed(1)}s`);
     activeYTPlayer.seekTo(normalizedProgress, true);
     userSeeked = false;
@@ -497,30 +498,32 @@ function updateFromServerPayload(data) {
 
   // ===== SYNC #3: DESPAUSE =====
   if (serverPlaying && !lastServerIsPlaying) {
-    console.log(`🔄 Sync #3 (despause): → ${normalizedProgress.toFixed(1)}s`);
+    console.log(`🔄 Sync #3 (despause): ${normalizedProgress.toFixed(1)}s`);
     activeYTPlayer.seekTo(normalizedProgress, true);
     return;
   }
 
-  // ===== SYNC #4: 4s FINAIS =====
+  // ===== SYNC #4: ÚLTIMOS 4s =====
   if (normalizedProgress > duration - 4) {
     console.log(`🔄 Sync #4 (4s final): ${normalizedProgress.toFixed(1)}s`);
     activeYTPlayer.seekTo(normalizedProgress, true);
     return;
   }
 
-  // ===== SEM SYNC: roda livre =====
-  console.debug(`⏸️ No sync: diff=${Math.abs(currentTime - normalizedProgress).toFixed(1)}s`);
+  // SEM SYNC: player livre
+  if (timeDiff > 1) console.debug(`⏸️ No sync (diff ${timeDiff.toFixed(1)}s): player livre`);
 
-  // Play/pause SEM seek (só estado)
-  const ytPlaying = activeYTPlayer.getPlayerState() === 1;
-  if (serverPlaying && !ytPlaying) {
+  // Play/pause SEMPRE sincroniza ESTADO (sem seek)
+  const ytState = activeYTPlayer.getPlayerState();
+  if (serverPlaying && ytState !== YT.PlayerState.PLAYING) {
     unlockYTPlayers();
     activeYTPlayer.playVideo();
     setPlayButtonState('playing');
-  } else if (!serverPlaying && ytPlaying) {
+    isPlaying = true;
+  } else if (!serverPlaying && ytState === YT.PlayerState.PLAYING) {
     activeYTPlayer.pauseVideo();
     setPlayButtonState('paused');
+    isPlaying = false;
   }
 
   // Fila/Listeners
@@ -624,26 +627,38 @@ function renderUsers(users) {
 }
 
 async function togglePlay() {
-  unlockYTPlayers();
-  if (!activeYTPlayer || isSyncLoading) return;
+  if (!activeYTPlayer) return;
   
   const playerState = activeYTPlayer.getPlayerState();
   
-  // PAUSE: Imediato local + comando servidor
+  // PAUSE: Imediato + servidor  
   if (playerState === YT.PlayerState.PLAYING) {
     activeYTPlayer.pauseVideo();
+    sendServerCommand('pause');
     setPlayButtonState('paused');
     isPlaying = false;
-    
-    // Envia pause ao servidor (sem espera)
-    sendServerCommand('pause');
     return;
   }
   
-  // PLAY: Loading até sync #3
+  // PLAY: Loading spinner durante despause sync
   setPlayButtonState('loading');
+  unlockYTPlayers();
   activeYTPlayer.playVideo();
-  isPlaying = true;  // Otimista
+  isPlaying = true;
+  
+  // Remove loading após 2s ou play state (timeout safety)
+  const timeoutId = setTimeout(() => {
+    setPlayButtonState('playing');
+  }, 2000);
+  
+  // Listener temporário para confirmar play
+  const checkPlay = () => {
+    if (activeYTPlayer.getPlayerState() === YT.PlayerState.PLAYING) {
+      setPlayButtonState('playing');
+      clearTimeout(timeoutId);
+      document.removeEventListener('playerStateChange', checkPlay);
+    }
+  };
 }
 
 function sendServerCommand(command) {
@@ -672,7 +687,7 @@ function playPrev() {
 function refreshProgressDisplay() {
   if (!activeYTPlayer) return;
   
-  // SEMPRE player time (livre/animação suave)
+  // ✅ SEMPRE player time = animação suave (zero lag)
   const duration = activeYTPlayer.getDuration() || 0;
   const current = activeYTPlayer.getCurrentTime ? activeYTPlayer.getCurrentTime() : 0;
   updateProgressDisplay(current, duration);
@@ -718,7 +733,8 @@ audio.addEventListener('ended', () => {
   }
 });
 
-// REMOVIDO: retrySync (só 4 syncs exatos)
+// ✅ Removido retrySyncInterval (zero jitters)
+let retrySyncInterval = null; // Mantido mas nunca usado
 
 // Tab control inside settings panel
 const sectionButtons = document.querySelectorAll('.section-btn');
