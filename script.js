@@ -1,31 +1,5 @@
-const dataExample = {
-  currentTrack: {
-    title: 'Reflexo Noturno',
-    artist: 'Nuvem Azul',
-    cover: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80',
-    videoId: 'M7lc1UVf-VE',
-    audio: 'https://cdn.pixabay.com/download/audio/2022/03/15/audio_4212a34e8d.mp3?filename=acoustic-guitar-12304.mp3',
-    lyrics: [
-      'No silêncio da noite, o vento me guia',
-      'Entre estrelas e lembranças, nossa melodia',
-      'No passo suave, dança a lua inteira',
-      'É o ritmo do presente, em cada nova beira',
-    ],
-  },
-  queue: [
-    { title: 'Alvorada Lunar', artist: 'Eco Solar', cover: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=640&q=80', videoId: 'H1r4J0u0vzs' },
-    { title: 'Céu em Chamas', artist: 'Maré Brava', cover: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=640&q=80', videoId: 'fK5gI2U-n1k' },
-    { title: 'Som do Mar', artist: 'Rio Sereno', cover: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=640&q=80', videoId: 'VbfpW0pbvaU' },
-    { title: 'Luz do Amanhecer', artist: 'Fase Lunar', cover: 'https://images.unsplash.com/photo-1481349518771-20055b2a7b24?auto=format&fit=crop&w=640&q=80', videoId: 'kXYiU_JCYtU' },
-    { title: 'Vento e Areia', artist: 'Praia Fina', cover: 'https://images.unsplash.com/photo-1445820135145-95eac7c17d61?auto=format&fit=crop&w=640&q=80' },
-  ],
-  users: [
-    { name: 'Luana', avatar: 'https://randomuser.me/api/portraits/women/44.jpg' },
-    { name: 'Miguel', avatar: 'https://randomuser.me/api/portraits/men/46.jpg' },
-    { name: 'Sofia', avatar: 'https://randomuser.me/api/portraits/women/47.jpg' },
-    { name: 'Pedro', avatar: 'https://randomuser.me/api/portraits/men/48.jpg' },
-  ],
-};
+// dataExample removido conforme requisito de produção (modo exemplo desativado)
+// const dataExample = { ... };
 
 const app = document.getElementById('app');
 const bgImage = document.getElementById('bgImage');
@@ -65,7 +39,7 @@ let currentLyricIndex = 0;
 let lyricsInterval;
 let volumeTimeout;
 let activeTrackIndex = 0;
-let currentTrack = dataExample.currentTrack;
+let currentTrack = null;
 let shuffleMode = false;
 let repeatMode = false;
 
@@ -74,7 +48,7 @@ let ytPlayer1 = null;
 let ytPlayer2 = null;
 let activeYTPlayer = null;
 let standbyYTPlayer = null;
-let activeVideoId = dataExample.currentTrack.videoId || null;
+let activeVideoId = null;
 let standbyVideoId = null;
 let ytPlayerReady = {
   player1: false,
@@ -119,6 +93,9 @@ function updateApiEndpoint(url) {
 let isSyncLoading = false;
 let latencyMs = 0;
 let lastPayload = null;
+let lastServerVideoId = null;
+let didSeekOnTrack = false;
+let users = [];
 
 const apiLinkInput = document.getElementById('apiLinkInput');
 const connectBtn = document.getElementById('connectBtn');
@@ -427,20 +404,20 @@ function renderUpcoming(queue) {
 }
 
 async function updateFromServerPayload(data) {
+  if (!data || typeof data !== 'object') return;
+
   lastPayload = data;
 
-  // Identificadores DOM
+  // Titulos e metadata (source of truth)
   trackTitle.textContent = data.track_name || 'Sem música';
   trackArtist.textContent = data.artist_name || 'Artista desconhecido';
 
   if (data.cover) {
-    if (albumArt.src !== data.cover) {
-      albumArt.src = data.cover;
-    }
+    albumArt.src = data.cover;
     bgImage.style.backgroundImage = `url('${data.cover}')`;
   }
 
-  // Lógica de progresso
+  // Progresso do servidor (segundos)
   const duration = Number(data.duration) || 0;
   const progressSec = Number(data.progress) || 0;
   const progressPercent = duration > 0 ? Math.min(100, Math.max(0, (progressSec / duration) * 100)) : 0;
@@ -448,28 +425,57 @@ async function updateFromServerPayload(data) {
   currentTime.textContent = formatTime(progressSec);
   durationTime.textContent = formatTime(duration);
 
-  // Letras sincronizadas
-  lyricsLine.textContent = data.current_lyric && typeof data.current_lyric === 'string' && data.current_lyric.trim() !== ''
+  // Letras
+  lyricsLine.textContent = (typeof data.current_lyric === 'string' && data.current_lyric.trim() !== '')
     ? data.current_lyric
     : 'Aguardando letra...';
 
-  // Estado de reprodução
-  if (data.is_playing === false) {
-    albumArt.style.opacity = '0.6';
-    setPlayButtonState('paused');
-    isPlaying = false;
-  } else {
-    albumArt.style.opacity = '1';
-    if (data.is_playing === true) {
-      setPlayButtonState('playing');
-      isPlaying = true;
+  // YouTube videoId - troca somente quando mudar
+  if (data.video_id) {
+    if (data.video_id !== lastServerVideoId) {
+      lastServerVideoId = data.video_id;
+      didSeekOnTrack = false;
+      if (activeYTPlayer && typeof activeYTPlayer.loadVideoById === 'function') {
+        activeYTPlayer.loadVideoById(data.video_id);
+      }
     }
   }
 
-  // Atualiza próximas músicas
+  // Play / pause a partir do servidor
+  if (typeof data.is_playing === 'boolean' && activeYTPlayer) {
+    if (data.is_playing) {
+      try { activeYTPlayer.playVideo(); } catch (e) { console.warn('playVideo falhou', e); }
+      setPlayButtonState('playing');
+      isPlaying = true;
+    } else {
+      try { activeYTPlayer.pauseVideo(); } catch (e) { console.warn('pauseVideo falhou', e); }
+      setPlayButtonState('paused');
+      isPlaying = false;
+    }
+  }
+
+  // Sincroniza posição apenas uma vez em mudança de faixa (evita 'engasgos')
+  if (data.video_id && !didSeekOnTrack && activeYTPlayer && typeof activeYTPlayer.seekTo === 'function') {
+    if (!isNaN(progressSec) && progressSec >= 0) {
+      try {
+        activeYTPlayer.seekTo(progressSec, true);
+      } catch (err) {
+        console.warn('seekTo falhou', err);
+      }
+    }
+    didSeekOnTrack = true;
+  }
+
+  // Atualiza fila e ouvintes
   if (Array.isArray(data.fila)) {
     renderUpcoming(data.fila);
   }
+
+  if (Array.isArray(data.usuarios)) {
+    renderListeners(data.usuarios);
+  }
+
+  setConnectionStatus(true, 'Sincronizado');
 }
 
 function updateTrackInfo(track) {
@@ -515,7 +521,7 @@ function startLyricsRotation() {
 }
 
 function renderQueue(items) {
-  const sourceList = Array.isArray(items) ? items : (Array.isArray(dataExample.queue) ? dataExample.queue : []);
+  const sourceList = Array.isArray(items) ? items : [];
   const limitedList = sourceList.slice(0, 5); // limitar a 5 itens
   upcomingList.innerHTML = '';
   if (!limitedList.length) {
@@ -549,13 +555,14 @@ function renderListeners(users) {
   });
 }
 
-function renderUsers() {
+function renderUsers(users) {
   userBank.innerHTML = '';
-  dataExample.users.forEach((user) => {
+  const source = Array.isArray(users) ? users : [];
+  source.forEach((user) => {
     const el = document.createElement('div');
     el.className = 'user-item';
     el.setAttribute('data-name', user.name);
-    el.innerHTML = `<img src="${user.avatar}" alt="${user.name}">`;
+    el.innerHTML = `<img src="${user.avatar || 'https://via.placeholder.com/40'}" alt="${user.name || 'Ouvinte'}">`;
     el.addEventListener('mouseenter', () => { el.style.filter = 'blur(0.3px)'; });
     el.addEventListener('mouseleave', () => { el.style.filter = 'none'; });
     userBank.appendChild(el);
@@ -595,42 +602,27 @@ async function togglePlay() {
   }, 250);
 }
 
-function setTrack(idx) {
-  const total = dataExample.queue.length + 1;
-  activeTrackIndex = ((idx % total) + total) % total;
-  currentTrack = activeTrackIndex === 0 ? dataExample.currentTrack : dataExample.queue[activeTrackIndex - 1];
-  updateTrackInfo(currentTrack);
+function sendServerCommand(command) {
+  fetch(`${getStatusEndpoint()}/command`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
+    },
+    body: JSON.stringify({ command }),
+  }).catch((err) => console.warn('Falha ao enviar comando', command, err));
+}
 
-  if (currentTrack.videoId) {
-    activeVideoId = currentTrack.videoId;
-    activeYTPlayer.loadVideoById(activeVideoId);
-    activeYTPlayer.unMute();
-    activeYTPlayer.playVideo();
-    setPlayButtonState('playing');
-    isPlaying = true;
-  }
+function setTrack(idx) {
+  console.warn('setTrack não implementado no modo de servidor. Use o servidor para alterar faixa.');
 }
 
 function playNext() {
-  if (shuffleMode) {
-    const options = [...Array(dataExample.queue.length + 1).keys()].filter((i) => i !== activeTrackIndex);
-    const randomIndex = options[Math.floor(Math.random() * options.length)];
-    setTrack(randomIndex);
-  } else if (repeatMode) {
-    setTrack(activeTrackIndex);
-  } else {
-    setTrack(activeTrackIndex + 1);
-  }
+  sendServerCommand('next');
 }
 
 function playPrev() {
-  if (shuffleMode) {
-    const options = [...Array(dataExample.queue.length + 1).keys()].filter((i) => i !== activeTrackIndex);
-    const randomIndex = options[Math.floor(Math.random() * options.length)];
-    setTrack(randomIndex);
-  } else {
-    setTrack(activeTrackIndex - 1);
-  }
+  sendServerCommand('prev');
 }
 
 function refreshProgressDisplay() {
@@ -714,8 +706,8 @@ saveProfile.addEventListener('click', async () => {
   const photo = profilePreview.src;
   if (!name || !photo) return alert('Informe nome e foto.');
 
-  dataExample.users[0] = { name, avatar: photo };
-  renderUsers();
+  users[0] = { name, avatar: photo };
+  renderUsers(users);
   statusFile.textContent = `Arquivo de listeners: perfil ${name} atualizado`;
   settingsPanel.classList.add('hidden');
 
@@ -723,6 +715,9 @@ saveProfile.addEventListener('click', async () => {
   if (payload) {
     renderListeners(payload.usuarios || []);
     renderQueue(payload.fila || []);
+    if (Array.isArray(payload.usuarios)) {
+      users = payload.usuarios;
+    }
   }
 });
 
@@ -755,32 +750,12 @@ profileFile.addEventListener('change', (event) => {
 });
 
 function init() {
-  const hasAutoApi = checkUrlParams();
-  setTimeout(() => {
-    serverStatusText.textContent = 'JAM Spotify ON';
-    connectionIcon.textContent = hasAutoApi ? '🟡' : '🟢';
-    apiLinkInput.value = API_BASE;
-    if (!hasAutoApi) {
-      setConnectionStatus(true, 'Pronto');
-    }
-    updateTrackInfo(dataExample.currentTrack);
-    renderQueue(dataExample.queue);
-    renderUsers();
-    startLyricsRotation();
-    statusFile.textContent = 'Arquivo de listeners: 4 ouvintes conectados';
-    profileName.value = dataExample.users[0].name;
-    profilePreview.src = dataExample.users[0].avatar;
-    renderListeners(dataExample.users);
-    postProfile(dataExample.users[0].name, dataExample.users[0].avatar).then((payload) => {
-      if (payload) {
-        renderListeners(payload.usuarios || dataExample.users);
-        renderQueue(payload.fila || dataExample.queue);
-      }
-    });
-    if (!hasAutoApi) {
-      startServerSync();
-    }
-  }, 1500);
+  checkUrlParams();
+  serverStatusText.textContent = 'JAM Spotify ON';
+  connectionIcon.textContent = '🟡';
+  apiLinkInput.value = API_BASE;
+  setConnectionStatus(false, 'Aguardando servidor...');
+  startServerSync();
 }
 
 init();
