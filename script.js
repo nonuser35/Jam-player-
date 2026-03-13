@@ -94,7 +94,7 @@ let isSyncLoading = false;
 let latencyMs = 0;
 let lastPayload = null;
 let lastServerVideoId = null;
-let didSeekOnTrack = false;
+let lastSyncedVideoId = null;
 let users = [];
 let pendingVideoId = null;
 
@@ -492,10 +492,29 @@ async function updateFromServerPayload(data) {
     }
   }
 
-  // Sincroniza o tempo do vídeo apenas uma vez por mudança de faixa ou nova sessão
-  if (activeYTPlayer && typeof activeYTPlayer.seekTo === 'function' && !didSeekOnTrack && !Number.isNaN(progressSec)) {
-    try { activeYTPlayer.seekTo(progressSec, true); } catch (err) { console.warn('seekTo falhou', err); }
-    didSeekOnTrack = true;
+  // RE-sync for drift if the source keeps playing and progress changes
+  if (activeYTPlayer && typeof data.is_playing === 'boolean' && data.is_playing && !Number.isNaN(progressSec)) {
+    const current = activeYTPlayer.getCurrentTime ? activeYTPlayer.getCurrentTime() : 0;
+    const delta = Math.abs(current - progressSec);
+    if (delta > 0.75) {
+      try { activeYTPlayer.seekTo(progressSec, true); } catch (e) { console.warn('Re-sync seekTo falhou', e); }
+      console.debug('Re-sync for drift', {delta, progressSec, current});
+    }
+  }
+
+  // Sincroniza o tempo do vídeo com o Spotify, compensando latência (drift > 0.8s)
+  if (activeYTPlayer && typeof activeYTPlayer.seekTo === 'function' && !Number.isNaN(progressSec)) {
+    try {
+      const currentTimeYT = activeYTPlayer.getCurrentTime ? activeYTPlayer.getCurrentTime() : 0;
+      const drift = Math.abs(currentTimeYT - progressSec);
+      if (drift > 0.75 || lastSyncedVideoId !== activeVideoId) {
+        activeYTPlayer.seekTo(progressSec, true);
+        lastSyncedVideoId = activeVideoId;
+        console.debug('seekTo sync', {progressSec, currentTimeYT, drift, activeVideoId});
+      }
+    } catch (err) {
+      console.warn('seekTo falhou', err);
+    }
   }
 
   // Fila e ouvintes
