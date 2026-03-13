@@ -475,8 +475,11 @@ async function updateFromServerPayload(data) {
   // Certifica que progressSec não exceda duração + 1s por causa de valores estranhos
   const normalizedProgress = duration > 0 ? Math.min(progressSec, duration + 1) : progressSec;
 
-  // atualiza apenas via helper para evitar conflito com refresh local (o efeito de "puxar pra frente e voltar")
-  updateProgressDisplay(normalizedProgress, duration);
+  // Ajusta tempo da barra usando servidor até o player estiver pronto ou em pausa.
+  const shouldUseServerProgress = !activeYTPlayer || !ytPlayerReady.player1 || !ytPlayerReady.player2 || !isInitialSyncDone || serverPlaying === false;
+  if (shouldUseServerProgress) {
+    updateProgressDisplay(normalizedProgress, duration);
+  }
 
   lyricsLine.textContent = (typeof data.current_lyric === 'string' && data.current_lyric.trim() !== '')
     ? data.current_lyric
@@ -516,8 +519,21 @@ async function updateFromServerPayload(data) {
         activeYTPlayer.loadVideoById({ videoId: serverVideoId, startSeconds: normalizedProgress || 0 });
       }
 
-      isInitialSyncDone = true;
+      isInitialSyncDone = false;
       preEndSyncDone = false;
+    }
+  }
+
+  // 2) Sync inicial com o servidor quando o player estiver pronto para o mesmo track
+  const isReadyForInitialSync = serverVideoId && !isInitialSyncDone && activeYTPlayer && typeof activeYTPlayer.seekTo === 'function' && !serverTrackChanged;
+  if (isReadyForInitialSync) {
+    try {
+      activeYTPlayer.seekTo(normalizedProgress, true);
+      console.debug('initial sync:', normalizedProgress);
+      isInitialSyncDone = true;
+      lastSyncedVideoId = activeVideoId;
+    } catch (err) {
+      console.warn('initial sync seekTo falhou', err);
     }
   }
 
