@@ -75,7 +75,6 @@ function onYouTubeIframeAPIReady() {
 
 function onReady() {
   console.log('🎵 Player pronto');
-  startTimeUpdate();
 }
 
 function onStateChange(e) {
@@ -85,10 +84,8 @@ function onStateChange(e) {
 
 function loadVideo(id) {
   console.log('🎵 Carregar:', id);
-  stopTimeUpdate();
   ytPlayer.loadVideoById(id);
   currentVideoId = id;
-  setTimeout(startTimeUpdate, 1000);  // Após load
 }
 
 // ===== SERIDOR UI/STATUS (SEM SYNC PLAYER) =====
