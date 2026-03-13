@@ -238,21 +238,11 @@ function initializeYTPlayers() {
     pendingProgress = 0;
     didSeekOnTrack = false;
     isInitialSyncDone = false; // Aguardamos o primeiro payload para ajustes finos
-  } else if (lastPayload && lastPayload.video_id) {
-    // Se não há pending, mas há lastPayload, usar para inicializar
-    const serverVideoId = String(lastPayload.video_id).trim();
-    const serverProgress = lastPayload.timestamp ? getServerProgressWithLatency(lastPayload) : normalizeSeconds(lastPayload.progress);
-    console.debug('initializeYTPlayers: using lastPayload for initial load', serverVideoId, 'at', serverProgress);
-    activeVideoId = serverVideoId;
-    if (serverProgress > 0) {
-      activeYTPlayer.loadVideoById({ videoId: serverVideoId, startSeconds: serverProgress });
-    } else {
-      activeYTPlayer.loadVideoById(serverVideoId);
-    }
-    isInitialSyncDone = false;
   }
 
-  // Se o servidor estava tocando, iniciar playback após load
+  // Removido: não usar lastPayload aqui, pois pode ser null no momento
+
+  // Se o servidor estava tocando, iniciar playback após load (mas só se lastPayload disponível)
   if (lastPayload && lastPayload.is_playing === true && activeVideoId === (lastPayload.video_id ? String(lastPayload.video_id).trim() : null)) {
     unlockYTPlayers();
     try { activeYTPlayer.playVideo(); } catch (e) { console.warn('playVideo falhou no initialize', e); }
@@ -496,6 +486,8 @@ async function updateFromServerPayload(data) {
   // Certifica que progressSec não exceda duração + 1s por causa de valores estranhos
   const normalizedProgress = duration > 0 ? Math.min(progressSec, duration + 1) : progressSec;
 
+  console.debug('Payload progress:', data.progress, 'normalized:', normalizedProgress, 'duration:', duration);
+
   // Forçamos a leitura do estado de playing antes do uso, para não usar variável indefinida.
   const serverPlaying = (typeof data.is_playing === 'boolean') ? data.is_playing : null;
 
@@ -512,6 +504,15 @@ async function updateFromServerPayload(data) {
   // Gerenciamento de double-buffering (crossfade)
   const serverVideoId = data.video_id ? String(data.video_id).trim() : null;
   const nowServerTimestamp = getServerTimestampMs(data);
+
+  // Forçar carregamento inicial se player pronto e vídeo não carregado ou diferente
+  if (activeYTPlayer && ytPlayerReady.player1 && ytPlayerReady.player2 && (!activeVideoId || activeVideoId !== serverVideoId)) {
+    console.debug('Forçando carregamento inicial:', serverVideoId, 'at', normalizedProgress);
+    activeVideoId = serverVideoId;
+    activeYTPlayer.loadVideoById({ videoId: serverVideoId, startSeconds: normalizedProgress });
+    isInitialSyncDone = false;
+    preEndSyncDone = false;
+  }
 
   const serverTrackChanged = serverVideoId && serverVideoId !== activeVideoId;
   const sameTrack = serverVideoId && serverVideoId === activeVideoId;
@@ -737,15 +738,6 @@ async function togglePlay() {
   }
 
   setPlayButtonState('loading');
-  await measureLatency();
-
-  if (lastPayload && typeof lastPayload.progress === 'number') {
-    const desired = lastPayload.progress + latencyMs / 2000;
-    try {
-      activeYTPlayer.seekTo(desired, true);
-    } catch (err) { console.warn('seek fail', err); }
-  }
-
   activeYTPlayer.playVideo();
   setTimeout(() => {
     if (activeYTPlayer.getPlayerState() === YT.PlayerState.PLAYING) {
