@@ -221,8 +221,10 @@ function renderQueue(queue) {
 }
 
 function setConnectionStatus(ok, msg) {
-  connectionIndicator.style.background = ok ? '#3f7b' : '#f55';
+  connectionIndicator.style.background = ok ? '#3fff7b' : '#f55';
   connectionMessage.textContent = msg || (ok ? 'Conectado' : 'Offline');
+  serverStatusText.textContent = msg || (ok ? 'Online' : 'Offline');  // ✅ Status central
+  connectionIcon.textContent = ok ? '🟢' : '🔴';
 }
 
 function playNext() { safeFetch(`${getStatusEndpoint()}/command`, { method: 'POST', body: JSON.stringify({command: 'next'}), headers: {'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true'} }).catch(() => {}); }
@@ -272,8 +274,8 @@ setInterval(fetchStatus, 1500);
 
 setInterval(() => {
   if (activeYTPlayer) {
-    const current = activeYTPlayer.getCurrentTime();
-    const duration = activeYTPlayer.getDuration();
-    updateProgressDisplay(current, duration);
+    const current = activeYTPlayer.getCurrentTime() || 0;
+    const duration = activeYTPlayer.getDuration() || 0;
+    if (duration > 0) updateProgressDisplay(current, duration);
   }
 }, 250);
