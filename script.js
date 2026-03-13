@@ -114,6 +114,15 @@ function formatTime(seconds) {
   return `${mins}:${secs}`;
 }
 
+function updateProgressDisplay(timeSec, durationSec) {
+  const duration = Number(durationSec) || 0;
+  const current = Number(timeSec) || 0;
+  const progressPercent = duration > 0 ? Math.min(100, Math.max(0, (current / duration) * 100)) : 0;
+  progress.value = progressPercent;
+  currentTime.textContent = formatTime(current);
+  durationTime.textContent = formatTime(duration);
+}
+
 function setPlayButtonState(state) {
   const playIcon = playPauseBtn.querySelector('.play-icon');
   playPauseBtn.classList.remove('loading', 'active');
@@ -443,10 +452,8 @@ async function updateFromServerPayload(data) {
     ? getServerProgressWithLatency(data)
     : serverProgress;
 
-  const progressPercent = duration > 0 ? Math.min(100, Math.max(0, (progressSec / duration) * 100)) : 0;
-  progress.value = progressPercent;
-  currentTime.textContent = formatTime(progressSec);
-  durationTime.textContent = formatTime(duration);
+  // atualiza apenas via helper para evitar conflito com refresh local (o efeito de "puxar pra frente e voltar")
+  updateProgressDisplay(progressSec, duration);
 
   lyricsLine.textContent = (typeof data.current_lyric === 'string' && data.current_lyric.trim() !== '')
     ? data.current_lyric
@@ -454,6 +461,22 @@ async function updateFromServerPayload(data) {
 
   // Gerenciamento de double-buffering (crossfade)
   const serverVideoId = data.video_id ? String(data.video_id).trim() : null;
+
+  // Se player já inicializado e a música bate com servidor, faz drift correction ativo
+  if (activeYTPlayer && activeVideoId && activeVideoId === serverVideoId && !Number.isNaN(progressSec)) {
+    const localTime = (typeof activeYTPlayer.getCurrentTime === 'function') ? activeYTPlayer.getCurrentTime() : null;
+    if (localTime !== null) {
+      const offset = Math.abs(localTime - progressSec);
+      if (offset > 1.0) {
+        try {
+          activeYTPlayer.seekTo(progressSec, true);
+          console.debug('drift correction seekTo', progressSec, '(offset', offset.toFixed(2), 's)');
+        } catch (err) {
+          console.warn('drift correction seekTo falhou', err);
+        }
+      }
+    }
+  }
 
   if (serverVideoId) {
     if (!activeYTPlayer || !standbyYTPlayer || !ytPlayerReady.player1 || !ytPlayerReady.player2) {
@@ -715,11 +738,9 @@ function playPrev() {
 
 function refreshProgressDisplay() {
   if (!activeYTPlayer || !activeYTPlayer.getCurrentTime) return;
-  const duration = activeYTPlayer.getDuration ? activeYTPlayer.getDuration() : 0;
+  const duration = activeYTPlayer.getDuration ? activeYTPlayer.getDuration() : (lastPayload ? Number(lastPayload.duration) || 0 : 0);
   const current = activeYTPlayer.getCurrentTime ? activeYTPlayer.getCurrentTime() : 0;
-  progress.value = duration ? (current / duration) * 100 : 0;
-  currentTime.textContent = formatTime(current);
-  durationTime.textContent = formatTime(duration);
+  updateProgressDisplay(current, duration);
 }
 
 setInterval(refreshProgressDisplay, 400);
