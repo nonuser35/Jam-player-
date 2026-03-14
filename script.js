@@ -5,18 +5,20 @@ if ('serviceWorker' in navigator) {
     .catch(err => console.log("Service Worker: Erro", err));
 }
 
-// --- ESTADO GLOBAL E AUTO-LOAD ---
+// --- ESTADO GLOBAL ---
 let apiBaseUrl = localStorage.getItem('jam_api_url') || ""; 
 let player1, player2, activePlayer, nextPlayer;
 let lastVideoId = "";
+let syncInterval = null; // Guardar o intervalo para não criar vários
 const SYNC_MARGIN = 9;
 
-// Lógica de Captura Automática da URL do Python
+// --- CAPTURA AUTOMÁTICA DA URL ---
 const urlParams = new URLSearchParams(window.location.search);
 const apiParam = urlParams.get('api');
 
 if (apiParam) {
-    apiBaseUrl = apiParam;
+    // Remove barra final se existir para evitar //status
+    apiBaseUrl = apiParam.replace(/\/$/, ""); 
     localStorage.setItem('jam_api_url', apiBaseUrl);
 }
 
@@ -31,76 +33,113 @@ function onYouTubeIframeAPIReady() {
     activePlayer = player1;
     nextPlayer = player2;
 
-    // Se já tivermos a API, conecta automaticamente após o YT carregar
+    // AUTO-CONECTAR: Se já temos a URL, inicia o loop imediatamente
     if (apiBaseUrl) {
-        setTimeout(() => {
-            document.getElementById('apiLinkInput').value = apiBaseUrl;
-            document.getElementById('connectBtn').click();
-        }, 1500);
+        console.log("> Conectando automaticamente a:", apiBaseUrl);
+        const input = document.getElementById('apiLinkInput');
+        if(input) input.value = apiBaseUrl;
+        iniciarSincronizacao();
     }
 }
 
-// --- 2. LOOP PRINCIPAL (SINCRONIA) ---
+// --- 2. LOOP DE SINCRONIZAÇÃO ---
+function iniciarSincronizacao() {
+    if (syncInterval) clearInterval(syncInterval);
+    
+    // Primeira chamada imediata
+    fetchSync();
+    // Define o loop de 1.5 segundos
+    syncInterval = setInterval(fetchSync, 1500);
+    
+    // Atualiza a UI para mostrar que está tentando conectar
+    const statusMsg = document.getElementById('connectionMessage');
+    if (statusMsg) statusMsg.innerText = "Conectado";
+    const indicator = document.getElementById('connectionIndicator');
+    if (indicator) indicator.className = "connection-indicator connected";
+}
+
 async function fetchSync() {
     if (!apiBaseUrl) return;
     try {
         const response = await fetch(`${apiBaseUrl}/status`);
+        if (!response.ok) throw new Error("Erro na resposta");
+        
         const data = await response.json();
+        
         atualizarUI(data);
         gerenciarAudio(data);
         atualizarFila(data.queue);
         atualizarOuvintes(data.usuarios);
-        if (data.track_name && typeof syncLyrics === "function") syncLyrics(data.track_name, data.artist_name);
+        
+        if (data.track_name && typeof syncLyrics === "function") {
+            syncLyrics(data.track_name, data.artist_name);
+        }
     } catch (err) {
-        document.getElementById('serverStatusText').innerText = "Reconectando...";
+        console.error("Erro na busca de dados:", err);
+        const statusMsg = document.getElementById('connectionMessage');
+        if (statusMsg) statusMsg.innerText = "Reconectando...";
+        const indicator = document.getElementById('connectionIndicator');
+        if (indicator) indicator.className = "connection-indicator disconnected";
     }
 }
 
 // --- 3. LÓGICA DE ÁUDIO ---
 function gerenciarAudio(data) {
-    if (!data.video_id) return;
+    if (!data.video_id || !activePlayer || !activePlayer.loadVideoById) return;
+
+    // Se a música mudou
     if (data.video_id !== lastVideoId) {
         lastVideoId = data.video_id;
+        console.log("> Nova música detectada, preparando player secundário...");
+        
         nextPlayer.loadVideoById(data.video_id, data.progress);
+        
         setTimeout(() => {
             activePlayer.stopVideo();
             let temp = activePlayer;
             activePlayer = nextPlayer;
             nextPlayer = temp;
             activePlayer.playVideo();
-            document.getElementById('player1').style.display = (activePlayer === player1) ? 'block' : 'none';
-            document.getElementById('player2').style.display = (activePlayer === player2) ? 'block' : 'none';
+            
+            // Alterna visibilidade se necessário (embora fiquem ocultos)
+            document.getElementById('player1').style.opacity = (activePlayer === player1) ? '1' : '0';
+            document.getElementById('player2').style.opacity = (activePlayer === player2) ? '1' : '0';
         }, 1000);
         return;
     }
+
+    // Sincronia de tempo
     const meuTempo = activePlayer.getCurrentTime();
     const diff = Math.abs(data.progress - meuTempo);
+
     if (diff > SYNC_MARGIN) {
         activePlayer.seekTo(data.progress, true);
-        activePlayer.setPlaybackRate(1.05);
-        setTimeout(() => activePlayer.setPlaybackRate(1.0), 2000);
-    } else {
-        activePlayer.setPlaybackRate(1.0);
     }
+
+    // Play/Pause
     if (data.is_playing) {
-        activePlayer.playVideo();
+        if (activePlayer.getPlayerState() !== 1) activePlayer.playVideo();
         document.getElementById('playPauseBtn').classList.add('active');
     } else {
-        activePlayer.pauseVideo();
+        if (activePlayer.getPlayerState() !== 2) activePlayer.pauseVideo();
         document.getElementById('playPauseBtn').classList.remove('active');
     }
 }
 
 // --- 4. INTERFACE ---
 function atualizarUI(data) {
+    // Títulos e Artista
     document.getElementById('trackTitle').innerText = data.track_name || "Sem música";
     document.getElementById('trackArtist').innerText = data.artist_name || "Desconhecido";
-    document.getElementById('serverStatusText').innerText = data.is_playing ? "Tocando agora" : "Pausado";
-    document.getElementById('connectionIndicator').className = "connection-indicator connected";
+    
+    // Capa e Background
     if (data.cover) {
-        document.getElementById('albumArt').src = data.cover;
+        const art = document.getElementById('albumArt');
+        if (art.src !== data.cover) art.src = data.cover;
         document.getElementById('bgImage').style.backgroundImage = `url(${data.cover})`;
     }
+
+    // Barra de Progresso
     if (data.duration > 0) {
         const percent = (data.progress / data.duration) * 100;
         document.getElementById('progress').value = percent;
@@ -124,7 +163,9 @@ function atualizarOuvintes(usuarios) {
     const container = document.getElementById('listenersPile');
     if (!container || !usuarios) return;
     container.innerHTML = usuarios.map(u => `
-        <div class="user-item" data-name="${u.name}"><img src="${u.photo || 'default-avatar.png'}"></div>
+        <div class="user-item" title="${u.name}">
+            <img src="${u.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png'}">
+        </div>
     `).join('');
 }
 
@@ -137,41 +178,26 @@ async function enviarComando(cmd, val = null) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ command: cmd, value: val })
         });
-    } catch (e) { console.error("Erro no comando"); }
+    } catch (e) { console.error("Erro ao enviar comando:", cmd); }
 }
 
-// Listeners
+// --- LISTENERS ---
 document.getElementById('connectBtn').addEventListener('click', () => {
-    apiBaseUrl = document.getElementById('apiLinkInput').value;
+    const val = document.getElementById('apiLinkInput').value;
+    apiBaseUrl = val.replace(/\/$/, ""); 
     localStorage.setItem('jam_api_url', apiBaseUrl);
-    document.getElementById('connectionMessage').innerText = "Conectado";
-    setInterval(fetchSync, 1500);
-});
-
-document.getElementById('volumeSlider').addEventListener('input', (e) => {
-    const v = parseFloat(e.target.value);
-    activePlayer.setVolume(v * 100);
-    enviarComando('volume', v * 100);
+    iniciarSincronizacao();
 });
 
 document.getElementById('nextBtn').addEventListener('click', () => enviarComando('next'));
 document.getElementById('prevBtn').addEventListener('click', () => enviarComando('prev'));
-document.getElementById('playPauseBtn').addEventListener('click', () => {
-    const isPlaying = document.getElementById('playPauseBtn').classList.contains('active');
+document.getElementById('playPauseBtn').addEventListener('click', function() {
+    const isPlaying = this.classList.contains('active');
     enviarComando(isPlaying ? 'pause' : 'play');
 });
 
-// Abas e Painéis
-document.getElementById('settingsBtn').addEventListener('click', () => document.getElementById('settingsPanel').classList.toggle('hidden'));
-document.querySelectorAll('.section-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        document.querySelectorAll('.section-btn, .section-panel').forEach(el => el.classList.remove('active'));
-        btn.classList.add('active');
-        document.querySelector(`.section-panel[data-section="${btn.dataset.section}"]`).classList.add('active');
-    });
-});
-
 function formatTime(s) {
+    if (!s) return "00:00";
     const min = Math.floor(s / 60);
     const seg = Math.floor(s % 60);
     return `${min.toString().padStart(2, '0')}:${seg.toString().padStart(2, '0')}`;
