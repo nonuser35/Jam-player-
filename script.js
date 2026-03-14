@@ -96,22 +96,29 @@ async function fetchStatus() {
     if (!res.ok) return;
     const data = await res.json();
     
-    // UI apenas
+    // SYNC VÍDEO + UI
+    if (data.video_id && data.video_id !== currentVideoId) {
+      loadVideo(data.video_id);
+      console.log('🎵 Sync servidor:', data.video_id);
+    }
+    
+    if (data.is_playing && ytPlayer) {
+      ytPlayer.playVideo();
+    }
+    
+    // UI
     trackTitle.textContent = data.track_name || '—';
     trackArtist.textContent = data.artist_name || '—';
     albumArt.src = data.cover || '';
     bgImage.style.backgroundImage = data.cover ? `url(${data.cover})` : '';
     lyricsLine.textContent = data.current_lyric || '';
     
-    if (Array.isArray(data.fila)) {
-      renderQueue(data.fila.slice(0, 5));
-    }
-    if (Array.isArray(data.usuarios)) {
-      renderListeners(data.usuarios);
-    }
+    if (Array.isArray(data.fila)) renderQueue(data.fila.slice(0, 5));
+    if (Array.isArray(data.usuarios)) renderListeners(data.usuarios);
     
     updateStatus(true);
-  } catch {
+  } catch (e) {
+    console.error('fetchStatus erro:', e);
     updateStatus(false);
   }
 }
