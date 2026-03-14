@@ -3,8 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Player de Música</title>
-  <link rel="stylesheet" href="style.css" />  <script src="https://www.youtube.com/iframe_api"></script></head>
+  <title>Jam Player Pro</title>
+  
+  <link rel="stylesheet" href="style.css" />
+  
+  <link rel="manifest" href="manifest.json">
+  
+  <script src="https://www.youtube.com/iframe_api"></script>
+</head>
 <body>
   <div class="app" id="app">
     <div class="bg-image" id="bgImage"></div>
@@ -14,146 +20,81 @@
       <div class="panel playqueue" id="upcomingPanel">
         <h3>Próximas músicas</h3>
         <div id="upcomingList" class="upcoming-list">
-          <div class="loading">Carregando próximas músicas...</div>
+          <div class="loading">Aguardando fila do Spotify...</div>
         </div>
       </div>
     </div>
 
     <div class="top-right">
-      <!-- Antigo painel de perfis desativado -->
-      <div class="users-panel" id="usersPanel" style="display: none;">
-        <div id="userBank" class="user-bank"></div>
-      </div>
       <div class="listeners-pile-panel" id="listenersPilePanel">
         <h3>Ouvintes na Jam</h3>
         <div id="listenersPile" class="listeners-pile">
-          <div class="loading">Nenhum ouvinte disponível</div>
+          <div class="loading">Nenhum ouvinte conectado</div>
         </div>
       </div>
     </div>
 
-    <main class="center-content">
-      <div class="ring-effect"></div>
-      <div class="album-art-container">
-        <img id="albumArt" class="album-art" src="" alt="Capa do Álbum" />
+    <main class="player-container">
+      <div class="album-wrapper">
+        <img id="albumArt" src="https://via.placeholder.com/300" alt="Capa do Álbum" class="album-art" />
       </div>
-      <div id="ytPlayers" class="yt-players">
-        <div id="player1" class="yt-player"></div>
-        <div id="player2" class="yt-player" style="display:none;"></div>
-      </div>
-      <div id="playerLoader" class="player-loader hidden">Carregando...</div>
-      <div class="server-monitor" id="serverStatus">
-        <span class="status-icon" id="connectionIcon">⚪</span>
-        <span id="serverStatusText">Aguardando servidor...</span>
-      </div>
-      <div class="status-file hidden" id="statusFile">Arquivo de listeners: vazio</div>
-    </main>
-
-    <section class="player" id="player">
-      <div class="top-player-row">
-        <div class="lyrics-container">
-          <div id="lyricsLine" class="lyrics-line">Letra da música aparecerá aqui</div>
-        </div>
+      
+      <div class="track-info">
+        <h1 id="trackTitle">Sem música</h1>
+        <h2 id="trackArtist">Desconhecido</h2>
       </div>
 
-      <div class="progress-area">
-        <div class="track-meta">
-          <strong id="trackTitle" class="track-title">Título da música</strong>
-          <span id="trackArtist" class="track-artist">Artista</span>
-        </div>
-        <div class="progress-wrap">
-          <input id="progress" type="range" min="0" max="100" value="0" step="0.1" />
-        </div>
-      </div>
-
-      <div class="time-row">
+      <div class="progress-container">
         <span id="currentTime">00:00</span>
+        <input type="range" id="progress" value="0" max="100" />
         <span id="durationTime">00:00</span>
       </div>
 
-      <div class="controls-row">
-        <button id="prevBtn" class="control-btn" title="Anterior" aria-label="Anterior">
-          <svg class="icon" viewBox="0 0 24 24"><polyline points="16 4 7 12 16 20" fill="none"/></svg>
-        </button>
-        <button id="shuffleBtn" class="control-btn" title="Aleatório" aria-label="Aleatório">
-          <svg class="icon" viewBox="0 0 24 24"><polyline points="16 3 21 3 21 8" fill="none"/><path d="M4 20h4l7-8-7-8H4" fill="none"/><polyline points="8 16 21 16 21 21" fill="none"/></svg>
-        </button>
-        <button id="playPauseBtn" class="control-btn play-btn" title="Play/Pause" aria-label="Play/Pause">
-          <span class="play-ring" aria-hidden="true"></span>
-          <svg class="icon play-icon" viewBox="0 0 24 24"><polygon points="8 5 19 12 8 19" fill="none"/></svg>
-        </button>
-        <button id="repeatBtn" class="control-btn" title="Repetir" aria-label="Repetir">
-          <svg class="icon" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9" fill="none"/><path d="M3 11v-2a4 4 0 0 1 4-4h14" fill="none"/><polyline points="7 23 3 19 7 15" fill="none"/><path d="M21 13v2a4 4 0 0 1-4 4H3" fill="none"/></svg>
-        </button>
-        <button id="nextBtn" class="control-btn" title="Próxima" aria-label="Próxima">
-          <svg class="icon" viewBox="0 0 24 24"><polyline points="8 4 17 12 8 20" fill="none"/></svg>
-        </button>
-        <button id="settingsBtn" class="control-btn" title="Configurações">⚙️</button>
-        <div class="volume-wrap">
-          <button id="volumeBtn" class="control-btn" title="Volume">🔉</button>
-          <div id="volumePanel" class="volume-panel">
-            <input id="volumeSlider" type="range" min="0" max="1" step="0.01" value="0.8" />
-          </div>
-        </div>
+      <div class="controls">
+        <button id="prevBtn" class="control-btn">⏮</button>
+        <button id="playPauseBtn" class="control-btn main-btn">▶</button>
+        <button id="nextBtn" class="control-btn">⏭</button>
       </div>
-    </section>
+
+      <div class="volume-container">
+        <span>🔈</span>
+        <input type="range" id="volumeSlider" min="0" max="1" step="0.01" value="0.5" />
+      </div>
+    </main>
+
+    <button id="settingsBtn" class="settings-trigger">⚙️</button>
 
     <aside id="settingsPanel" class="settings-panel hidden">
-      <div class="settings-columns">
-        <nav class="settings-menu">
-          <button data-section="profile" class="section-btn active" title="Meu Perfil">👤<span>Meu Perfil</span></button>
-          <button data-section="server" class="section-btn" title="Conexão/Servidor">🌐<span>Servidor</span></button>
-          <button data-section="player" class="section-btn" title="Preferências do Player">⚙️<span>Player</span></button>
+      <div class="settings-content">
+        <nav class="settings-nav">
+          <button class="section-btn active" data-section="server">Servidor</button>
+          <button class="section-btn" data-section="player">Player</button>
         </nav>
 
-        <div class="settings-content">
-          <section data-section="profile" class="section-panel active">
-            <h4>Meu Perfil</h4>
-            <div class="profile-editor">
-              <div class="profile-photo-block">
-                <img id="profilePreview" src="" alt="Preview" class="profile-preview" />
-                <label for="profileFile" class="photo-label">Alterar foto</label>
-                <input id="profileFile" type="file" accept="image/*" />
-              </div>
-              <div class="profile-fields">
-                <label for="profileName">Nome</label>
-                <input id="profileName" type="text" placeholder="Nome do usuário" />
-              </div>
-            </div>
-          </section>
-
-          <section data-section="server" class="section-panel">
+        <div class="sections">
+          <section data-section="server" class="section-panel active">
             <h4>Conexão / Servidor</h4>
             <div class="connection-manager">
               <label for="apiLinkInput">Link API (ngrok)</label>
-              <input id="apiLinkInput" type="text" placeholder="https://xxxxx.ngrok.io" />
-              <button id="connectBtn" class="action-btn" type="button">Conectar</button>
+              <input id="apiLinkInput" type="text" placeholder="https://xxxxx.ngrok-free.app" />
+              <button id="connectBtn" class="action-btn">Conectar</button>
               <div id="connectionStatus" class="connection-status">
-                <span id="connectionIndicator" class="connection-indicator" aria-hidden="true"></span>
+                <span id="connectionIndicator" class="connection-indicator"></span>
                 <span id="connectionMessage">Desconectado</span>
               </div>
             </div>
           </section>
 
           <section data-section="player" class="section-panel">
-            <h4>Preferências do Player</h4>
-            <p>Configurações de áudio e experiência do player.</p>
-            <ul class="player-settings-list">
-              <li>Equalizador de 10 bandas (futuro)</li>
-              <li>Modo Crossfade</li>
-              <li>Detalhe de buffer (atual)</li>
-            </ul>
+            <h4>Preferências</h4>
+            <p>Sincronização ativa via Double Buffering.</p>
           </section>
         </div>
       </div>
-
-      <div class="settings-action">
-        <button id="saveProfile" class="action-btn">Salvar</button>
-        <button id="cancelProfile" class="action-btn">Cancelar</button>
-      </div>
     </aside>
 
-    <audio id="audio" preload="metadata"></audio>
+    <div id="player1" style="position: absolute; width: 0; height: 0; pointer-events: none;"></div>
+    <div id="player2" style="position: absolute; width: 0; height: 0; pointer-events: none;"></div>
   </div>
 
   <script src="script.js"></script>
