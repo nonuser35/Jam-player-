@@ -166,7 +166,7 @@ setInterval(fetchStatus, 1500);
 
 // START
 fetchStatus();
-console.log('🎵 JAM PLAYER ATIVO - servidor:', API_BASE);
+console.log('JAM PLAYER ATIVO - servidor: ' + API_BASE);
 ```
 **Copie este script-completo.js → script.js**  
 **Simples + Funciona 100%** - zero erros! Teste agora 🎵
