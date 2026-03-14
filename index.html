@@ -1,102 +1,89 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Jam Player Pro</title>
-  
-  <link rel="stylesheet" href="style.css" />
-  
-  <link rel="manifest" href="manifest.json">
-  
-  <script src="https://www.youtube.com/iframe_api"></script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Jam Player Pro</title>
+    
+    <link rel="stylesheet" href="style.css" />
+    
+    <link rel="manifest" href="manifest.json">
+    
+    <script src="https://www.youtube.com/iframe_api"></script>
 </head>
 <body>
-  <div class="app" id="app">
-    <div class="bg-image" id="bgImage"></div>
-    <div class="overlay"></div>
+    <div class="app" id="app">
+        <div class="bg-image" id="bgImage"></div>
+        <div class="overlay"></div>
 
-    <div class="top-left">
-      <div class="panel playqueue" id="upcomingPanel">
-        <h3>Próximas músicas</h3>
-        <div id="upcomingList" class="upcoming-list">
-          <div class="loading">Aguardando fila do Spotify...</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="top-right">
-      <div class="listeners-pile-panel" id="listenersPilePanel">
-        <h3>Ouvintes na Jam</h3>
-        <div id="listenersPile" class="listeners-pile">
-          <div class="loading">Nenhum ouvinte conectado</div>
-        </div>
-      </div>
-    </div>
-
-    <main class="player-container">
-      <div class="album-wrapper">
-        <img id="albumArt" src="https://via.placeholder.com/300" alt="Capa do Álbum" class="album-art" />
-      </div>
-      
-      <div class="track-info">
-        <h1 id="trackTitle">Sem música</h1>
-        <h2 id="trackArtist">Desconhecido</h2>
-      </div>
-
-      <div class="progress-container">
-        <span id="currentTime">00:00</span>
-        <input type="range" id="progress" value="0" max="100" />
-        <span id="durationTime">00:00</span>
-      </div>
-
-      <div class="controls">
-        <button id="prevBtn" class="control-btn">⏮</button>
-        <button id="playPauseBtn" class="control-btn main-btn">▶</button>
-        <button id="nextBtn" class="control-btn">⏭</button>
-      </div>
-
-      <div class="volume-container">
-        <span>🔈</span>
-        <input type="range" id="volumeSlider" min="0" max="1" step="0.01" value="0.5" />
-      </div>
-    </main>
-
-    <button id="settingsBtn" class="settings-trigger">⚙️</button>
-
-    <aside id="settingsPanel" class="settings-panel hidden">
-      <div class="settings-content">
-        <nav class="settings-nav">
-          <button class="section-btn active" data-section="server">Servidor</button>
-          <button class="section-btn" data-section="player">Player</button>
-        </nav>
-
-        <div class="sections">
-          <section data-section="server" class="section-panel active">
-            <h4>Conexão / Servidor</h4>
-            <div class="connection-manager">
-              <label for="apiLinkInput">Link API (ngrok)</label>
-              <input id="apiLinkInput" type="text" placeholder="https://xxxxx.ngrok-free.app" />
-              <button id="connectBtn" class="action-btn">Conectar</button>
-              <div id="connectionStatus" class="connection-status">
-                <span id="connectionIndicator" class="connection-indicator"></span>
-                <span id="connectionMessage">Desconectado</span>
-              </div>
+        <aside class="top-left">
+            <div class="panel playqueue">
+                <h3>Próximas músicas</h3>
+                <div id="upcomingList" class="upcoming-list">
+                    <div class="loading">Aguardando fila do Spotify...</div>
+                </div>
             </div>
-          </section>
+        </aside>
 
-          <section data-section="player" class="section-panel">
-            <h4>Preferências</h4>
-            <p>Sincronização ativa via Double Buffering.</p>
-          </section>
-        </div>
-      </div>
-    </aside>
+        <main class="player-container">
+            <div class="album-wrapper">
+                <img id="albumArt" src="https://via.placeholder.com/350" alt="Capa do Álbum" class="album-art" />
+            </div>
+            
+            <div class="track-info">
+                <h1 id="trackTitle">Sem música</h1>
+                <h2 id="trackArtist">Desconhecido</h2>
+            </div>
 
-    <div id="player1" style="position: absolute; width: 0; height: 0; pointer-events: none;"></div>
-    <div id="player2" style="position: absolute; width: 0; height: 0; pointer-events: none;"></div>
-  </div>
+            <div class="progress-container">
+                <span id="currentTime">00:00</span>
+                <input type="range" id="progress" value="0" max="100" />
+                <span id="durationTime">00:00</span>
+            </div>
 
-  <script src="script.js"></script>
+            <div class="controls">
+                <button id="prevBtn" class="control-btn">⏮</button>
+                <button id="playPauseBtn" class="control-btn main-btn">▶</button>
+                <button id="nextBtn" class="control-btn">⏭</button>
+            </div>
+
+            <div class="volume-container">
+                <span>🔈</span>
+                <input type="range" id="volumeSlider" min="0" max="1" step="0.01" value="0.5" />
+            </div>
+        </main>
+
+        <aside class="top-right">
+            <div class="panel">
+                <h3>Ouvintes na Jam</h3>
+                <div id="listenersPile" class="listeners-pile">
+                    <div class="loading">Nenhum ouvinte conectado</div>
+                </div>
+            </div>
+        </aside>
+
+        <button id="settingsBtn" class="settings-trigger">⚙️</button>
+
+        <section id="settingsPanel" class="settings-panel hidden">
+            <div class="section-panel active">
+                <h4>Conexão / Servidor</h4>
+                <div class="connection-manager">
+                    <label for="apiLinkInput">Link API (ngrok)</label>
+                    <input id="apiLinkInput" type="text" placeholder="https://xxxxx.ngrok-free.app" />
+                    <button id="connectBtn" class="action-btn">Conectar</button>
+                    
+                    <div id="connectionStatus" class="connection-status">
+                        <span id="connectionIndicator" class="connection-indicator"></span>
+                        <span id="connectionMessage">Desconectado</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div id="player1" style="position: absolute; width: 0; height: 0; pointer-events: none; opacity: 0;"></div>
+        <div id="player2" style="position: absolute; width: 0; height: 0; pointer-events: none; opacity: 0;"></div>
+    </div>
+
+    <script src="script.js"></script>
 </body>
 </html>
