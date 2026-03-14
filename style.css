@@ -1,298 +1,38 @@
-/* --- RESET E BASES --- */
-* {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
+/* [COPIAR O TEU CSS TODO AQUI] */
+/* ... (Todo o código que colaste acima) ... */
+
+/* --- ADICIONA APENAS ESTAS LINHAS NO FINAL PARA O VOLUME E CONFIGS FUNCIONAREM --- */
+
+/* Garante que o slider de volume que adicionamos apareça com o teu estilo */
+#volumeSlider {
+    width: 100px;
+    -webkit-appearance: none;
+    background: transparent;
 }
 
-body {
-    font-family: 'Inter', sans-serif;
-    color: #fff;
-    background: #050a0f;
-    height: 100vh;
-    overflow: hidden;
-}
-
-/* --- FUNDO DINÂMICO --- */
-.bg-image {
-    position: fixed;
-    inset: 0;
-    background-size: cover;
-    background-position: center;
-    filter: blur(50px) brightness(0.4);
-    z-index: -2;
-    transition: background-image 1.2s ease-in-out;
-    transform: scale(1.1); /* Evita bordas brancas no blur */
-}
-
-.overlay {
-    position: fixed;
-    inset: 0;
-    background: radial-gradient(circle at center, transparent 20%, rgba(0,0,0,0.8) 100%);
-    z-index: -1;
-}
-
-/* --- ESTRUTURA APP (FLEXBOX) --- */
-.app {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    height: 100vh;
-    padding: 40px;
-    gap: 20px;
-}
-
-/* --- PAINÉIS LATERAIS --- */
-.top-left, .top-right {
-    width: 320px;
-    height: 80vh;
-    display: flex;
-    flex-direction: column;
-}
-
-.panel {
-    background: rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(15px);
-    -webkit-backdrop-filter: blur(15px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 24px;
-    padding: 20px;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-}
-
-.panel h3 {
-    font-size: 14px;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    margin-bottom: 20px;
-    color: rgba(255, 255, 255, 0.6);
-}
-
-/* --- FILA DE MÚSICAS (PLAYQUEUE) --- */
-.upcoming-list {
-    flex: 1;
-    overflow-y: auto;
-    padding-right: 10px;
-}
-
-.upcoming-list::-webkit-scrollbar {
-    width: 4px;
-}
-
-.upcoming-list::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
-}
-
-.upcoming-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 16px;
-    transition: transform 0.2s;
-}
-
-.upcoming-item img {
-    width: 50px;
-    height: 50px;
-    border-radius: 8px;
-    object-fit: cover;
-}
-
-.song-info strong {
-    display: block;
-    font-size: 14px;
-    color: #fff;
-}
-
-.song-info small {
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.5);
-}
-
-/* --- OUVINTES (PILE) --- */
-.listeners-pile {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-
-.user-item {
-    width: 45px;
-    height: 45px;
-    border-radius: 50%;
-    border: 2px solid #1db954;
-    overflow: hidden;
-    box-shadow: 0 0 15px rgba(29, 185, 84, 0.3);
-}
-
-.user-item img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-/* --- PLAYER CENTRAL --- */
-.player-container {
-    flex: 1;
-    max-width: 450px;
-    text-align: center;
-    z-index: 10;
-}
-
-.album-art {
-    width: 350px;
-    height: 350px;
-    border-radius: 30px;
-    margin-bottom: 30px;
-    box-shadow: 0 30px 80px rgba(0,0,0,0.6);
-    object-fit: cover;
-    transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.album-art:hover {
-    transform: scale(1.03);
-}
-
-.track-info h1 {
-    font-size: 28px;
-    margin-bottom: 5px;
-    font-weight: 700;
-}
-
-.track-info h2 {
-    font-size: 18px;
-    color: rgba(255, 255, 255, 0.6);
-    font-weight: 400;
-}
-
-/* --- CONTROLES E PROGRESSO --- */
-.progress-container {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    margin: 30px 0;
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.5);
-}
-
-input[type=range] {
-    flex: 1;
+#volumeSlider::-webkit-slider-runnable-track {
     height: 4px;
-    accent-color: #1db954;
-    cursor: pointer;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
 }
 
-.controls {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 25px;
-}
-
-.control-btn {
-    background: none;
-    border: none;
-    color: #fff;
-    font-size: 24px;
-    cursor: pointer;
-    transition: 0.2s;
-}
-
-.main-btn {
-    width: 70px;
-    height: 70px;
-    background: #fff;
-    color: #000;
+#volumeSlider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    height: 12px;
+    width: 12px;
     border-radius: 50%;
-    font-size: 22px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 10px 20px rgba(0,0,0,0.2);
-}
-
-.main-btn:hover {
-    transform: scale(1.1);
     background: #1db954;
-    color: #fff;
+    margin-top: -4px;
+    box-shadow: 0 0 10px rgba(29, 185, 84, 0.5);
 }
 
-/* --- VOLUME --- */
-.volume-container {
-    margin-top: 25px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    opacity: 0.6;
-    transition: opacity 0.3s;
+/* Correção para o painel de configurações original */
+.settings-panel.hidden {
+    display: none !important;
 }
 
-.volume-container:hover { opacity: 1; }
-
-#volumeSlider { width: 100px; }
-
-/* --- PAINEL DE CONFIGURAÇÕES --- */
-.settings-trigger {
-    position: fixed;
-    bottom: 30px;
-    right: 30px;
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: #fff;
-    cursor: pointer;
-    backdrop-filter: blur(10px);
-    z-index: 100;
-}
-
-.settings-panel {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 400px;
-    background: rgba(10, 15, 20, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 30px;
-    padding: 30px;
-    z-index: 200;
-    box-shadow: 0 50px 100px rgba(0,0,0,0.8);
-}
-
-.hidden { display: none !important; }
-
-.section-panel h4 { margin-bottom: 15px; color: #1db954; }
-
-.connection-manager input {
-    width: 100%;
-    padding: 12px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-    color: #fff;
-    margin-bottom: 15px;
-}
-
-.action-btn {
-    width: 100%;
-    padding: 12px;
-    background: #1db954;
-    border: none;
-    border-radius: 10px;
-    color: #fff;
-    font-weight: 700;
-    cursor: pointer;
-}
-
-/* --- RESPONSIVIDADE --- */
-@media (max-width: 1100px) {
-    .app { flex-direction: column; overflow-y: auto; height: auto; }
-    .top-left, .top-right { width: 100%; height: auto; }
-    .player-container { order: -1; margin-top: 40px; }
+/* Estilo para o botão Play/Pause quando ativo (usando a tua cor ring-rgb) */
+#playPauseBtn.active {
+    background: rgba(29, 185, 84, 0.2) !important;
+    border-color: #1db954 !important;
 }
