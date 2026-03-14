@@ -1,175 +1,178 @@
-// JAM PLAYER FINAL - 100% FUNCIONANDO
-(function() {
-  'use strict';
+// --- REGISTRO DO SERVICE WORKER (PWA) ---
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js')
+    .then(() => console.log("Service Worker: Ativo"))
+    .catch(err => console.log("Service Worker: Erro", err));
+}
 
-const bgImage = document.getElementById('bgImage');
-const albumArt = document.getElementById('albumArt');
-const trackArtist = document.getElementById('trackArtist');
-const trackTitle = document.getElementById('trackTitle');
-const lyricsLine = document.getElementById('lyricsLine');
-const upcomingList = document.getElementById('upcomingList');
-const listenersPile = document.getElementById('listenersPile');
-const serverStatus = document.getElementById('serverStatus');
-const connectionIcon = document.getElementById('connectionIcon');
-const serverStatusText = document.getElementById('serverStatusText');
-const progress = document.getElementById('progress');
-const currentTime = document.getElementById('currentTime');
-const durationTime = document.getElementById('durationTime');
-const playPauseBtn = document.getElementById('playPauseBtn');
-const prevBtn = document.getElementById('prevBtn');
-const nextBtn = document.getElementById('nextBtn');
-const apiLinkInput = document.getElementById('apiLinkInput');
-const connectBtn = document.getElementById('connectBtn');
-const connectionIndicator = document.getElementById('connectionIndicator');
-const connectionMessage = document.getElementById('connectionMessage');
+// --- ESTADO GLOBAL E AUTO-LOAD ---
+let apiBaseUrl = localStorage.getItem('jam_api_url') || ""; 
+let player1, player2, activePlayer, nextPlayer;
+let lastVideoId = "";
+const SYNC_MARGIN = 9;
 
-let isPlaying = false;
-let API_BASE = localStorage.getItem('jamApiLink') || 'http://localhost:8000';
+// Lógica de Captura Automática da URL do Python
+const urlParams = new URLSearchParams(window.location.search);
+const apiParam = urlParams.get('api');
 
-let ytPlayer1, ytPlayer2, activeYTPlayer, standbyYTPlayer;
-let activeVideoId, ytReady = {player1: false, player2: false};
-let lastPayload, latencyMs = 0;
+if (apiParam) {
+    apiBaseUrl = apiParam;
+    localStorage.setItem('jam_api_url', apiBaseUrl);
+}
+
+// --- 1. INICIALIZAÇÃO DO YOUTUBE ---
+function onYouTubeIframeAPIReady() {
+    const config = { 
+        height: '0', width: '0', 
+        playerVars: { 'controls': 0, 'disablekb': 1, 'autoplay': 1, 'origin': window.location.origin } 
+    };
+    player1 = new YT.Player('player1', config);
+    player2 = new YT.Player('player2', config);
+    activePlayer = player1;
+    nextPlayer = player2;
+
+    // Se já tivermos a API, conecta automaticamente após o YT carregar
+    if (apiBaseUrl) {
+        setTimeout(() => {
+            document.getElementById('apiLinkInput').value = apiBaseUrl;
+            document.getElementById('connectBtn').click();
+        }, 1500);
+    }
+}
+
+// --- 2. LOOP PRINCIPAL (SINCRONIA) ---
+async function fetchSync() {
+    if (!apiBaseUrl) return;
+    try {
+        const response = await fetch(`${apiBaseUrl}/status`);
+        const data = await response.json();
+        atualizarUI(data);
+        gerenciarAudio(data);
+        atualizarFila(data.queue);
+        atualizarOuvintes(data.usuarios);
+        if (data.track_name && typeof syncLyrics === "function") syncLyrics(data.track_name, data.artist_name);
+    } catch (err) {
+        document.getElementById('serverStatusText').innerText = "Reconectando...";
+    }
+}
+
+// --- 3. LÓGICA DE ÁUDIO ---
+function gerenciarAudio(data) {
+    if (!data.video_id) return;
+    if (data.video_id !== lastVideoId) {
+        lastVideoId = data.video_id;
+        nextPlayer.loadVideoById(data.video_id, data.progress);
+        setTimeout(() => {
+            activePlayer.stopVideo();
+            let temp = activePlayer;
+            activePlayer = nextPlayer;
+            nextPlayer = temp;
+            activePlayer.playVideo();
+            document.getElementById('player1').style.display = (activePlayer === player1) ? 'block' : 'none';
+            document.getElementById('player2').style.display = (activePlayer === player2) ? 'block' : 'none';
+        }, 1000);
+        return;
+    }
+    const meuTempo = activePlayer.getCurrentTime();
+    const diff = Math.abs(data.progress - meuTempo);
+    if (diff > SYNC_MARGIN) {
+        activePlayer.seekTo(data.progress, true);
+        activePlayer.setPlaybackRate(1.05);
+        setTimeout(() => activePlayer.setPlaybackRate(1.0), 2000);
+    } else {
+        activePlayer.setPlaybackRate(1.0);
+    }
+    if (data.is_playing) {
+        activePlayer.playVideo();
+        document.getElementById('playPauseBtn').classList.add('active');
+    } else {
+        activePlayer.pauseVideo();
+        document.getElementById('playPauseBtn').classList.remove('active');
+    }
+}
+
+// --- 4. INTERFACE ---
+function atualizarUI(data) {
+    document.getElementById('trackTitle').innerText = data.track_name || "Sem música";
+    document.getElementById('trackArtist').innerText = data.artist_name || "Desconhecido";
+    document.getElementById('serverStatusText').innerText = data.is_playing ? "Tocando agora" : "Pausado";
+    document.getElementById('connectionIndicator').className = "connection-indicator connected";
+    if (data.cover) {
+        document.getElementById('albumArt').src = data.cover;
+        document.getElementById('bgImage').style.backgroundImage = `url(${data.cover})`;
+    }
+    if (data.duration > 0) {
+        const percent = (data.progress / data.duration) * 100;
+        document.getElementById('progress').value = percent;
+        document.getElementById('currentTime').innerText = formatTime(data.progress);
+        document.getElementById('durationTime').innerText = formatTime(data.duration);
+    }
+}
+
+function atualizarFila(queue) {
+    const list = document.getElementById('upcomingList');
+    if (!list || !queue) return;
+    list.innerHTML = queue.map(song => `
+        <div class="upcoming-item fade-in">
+            <img src="${song.cover}" alt="Capa">
+            <div class="song-info"><strong>${song.name}</strong><small>${song.artist}</small></div>
+        </div>
+    `).join('');
+}
+
+function atualizarOuvintes(usuarios) {
+    const container = document.getElementById('listenersPile');
+    if (!container || !usuarios) return;
+    container.innerHTML = usuarios.map(u => `
+        <div class="user-item" data-name="${u.name}"><img src="${u.photo || 'default-avatar.png'}"></div>
+    `).join('');
+}
+
+// --- 5. COMANDOS ---
+async function enviarComando(cmd, val = null) {
+    if (!apiBaseUrl) return;
+    try {
+        await fetch(`${apiBaseUrl}/command`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command: cmd, value: val })
+        });
+    } catch (e) { console.error("Erro no comando"); }
+}
+
+// Listeners
+document.getElementById('connectBtn').addEventListener('click', () => {
+    apiBaseUrl = document.getElementById('apiLinkInput').value;
+    localStorage.setItem('jam_api_url', apiBaseUrl);
+    document.getElementById('connectionMessage').innerText = "Conectado";
+    setInterval(fetchSync, 1500);
+});
+
+document.getElementById('volumeSlider').addEventListener('input', (e) => {
+    const v = parseFloat(e.target.value);
+    activePlayer.setVolume(v * 100);
+    enviarComando('volume', v * 100);
+});
+
+document.getElementById('nextBtn').addEventListener('click', () => enviarComando('next'));
+document.getElementById('prevBtn').addEventListener('click', () => enviarComando('prev'));
+document.getElementById('playPauseBtn').addEventListener('click', () => {
+    const isPlaying = document.getElementById('playPauseBtn').classList.contains('active');
+    enviarComando(isPlaying ? 'pause' : 'play');
+});
+
+// Abas e Painéis
+document.getElementById('settingsBtn').addEventListener('click', () => document.getElementById('settingsPanel').classList.toggle('hidden'));
+document.querySelectorAll('.section-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.section-btn, .section-panel').forEach(el => el.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelector(`.section-panel[data-section="${btn.dataset.section}"]`).classList.add('active');
+    });
+});
 
 function formatTime(s) {
-  return new Date(s * 1000).toISOString().substr(14, 5);
+    const min = Math.floor(s / 60);
+    const seg = Math.floor(s % 60);
+    return `${min.toString().padStart(2, '0')}:${seg.toString().padStart(2, '0')}`;
 }
-
-function updateProgress(current, duration) {
-  const pct = duration ? (current / duration) * 100 : 0;
-  progress.value = pct;
-  currentTime.textContent = formatTime(current);
-  durationTime.textContent = formatTime(duration);
-}
-
-function setPlayButton(state) {
-  playPauseBtn.classList.toggle('active', state === 'playing');
-  playPauseBtn.classList.toggle('loading', state === 'loading');
-  playPauseBtn.disabled = state === 'loading';
-}
-
-function getStatusEndpoint() { return `${API_BASE}/status`; }
-
-async function fetchStatus() {
-  try {
-    const res = await fetch(getStatusEndpoint(), {cache: 'no-store'});
-    if (!res.ok) throw new Error('Offline');
-    const data = await res.json();
-    lastPayload = data;
-    updateUI(data);
-  } catch(e) {
-    connectionIndicator.classList.remove('connected');
-    connectionIndicator.classList.add('disconnected');
-  }
-}
-
-function updateUI(data) {
-  trackTitle.textContent = data.track_name;
-  trackArtist.textContent = data.artist_name;
-  if (data.cover) {
-    albumArt.src = data.cover;
-    bgImage.style.backgroundImage = `url(${data.cover})`;
-  }
-  lyricsLine.textContent = data.current_lyric || '';
-  
-  const progress = data.progress || 0;
-  const duration = data.duration || 0;
-  updateProgress(progress, duration);
-  
-  const videoId = data.video_id;
-  const isPlayingServer = !!data.is_playing;
-  
-  // NOVO VÍDEO?
-  if (videoId && videoId !== activeVideoId && activeYTPlayer) {
-    console.log('🎵 NOVO:', videoId, 'seek', progress);
-    activeVideoId = videoId;
-    activeYTPlayer.loadVideoById({videoId, startSeconds: progress});
-    // FORCE SYNC 500ms
-    setTimeout(() => activeYTPlayer.seekTo(progress, true), 500);
-  }
-  
-  // SYNC PLAY/PAUSE
-  if (activeYTPlayer) {
-    const state = activeYTPlayer.getPlayerState();
-    if (isPlayingServer && state !== 1) {
-      activeYTPlayer.playVideo();
-    } else if (!isPlayingServer && state === 1) {
-      activeYTPlayer.pauseVideo();
-    }
-  }
-  
-  // LISTENERS
-  if (data.usuarios && Array.isArray(data.usuarios)) {
-    listenersPile.innerHTML = data.usuarios.map(u => 
-      `<div class="listener-chip">
-        <img src="${u.avatar || ''}" />
-        <span>${u.name || 'Anônimo'}</span>
-      </div>`
-    ).join('') || 'Nenhum ouvinte';
-  }
-
-  
-  connectionIndicator.classList.add('connected');
-  connectionIndicator.classList.remove('disconnected');
-}
-
-function onYTReady(event, id) {
-  ytReady[id] = true;
-  if (ytReady.player1 && ytReady.player2) {
-    activeYTPlayer = ytPlayer1;
-    standbyYTPlayer = ytPlayer2;
-    console.log('✅ YT Players prontos!');
-  }
-}
-
-function onYTState(event) {
-  const state = event.data;
-  if (state === 0) playNext(); // ENDED
-}
-
-function unlockYT() {
-  activeYTPlayer.playVideo();
-  setTimeout(() => activeYTPlayer.pauseVideo(), 100);
-}
-
-function togglePlay() {
-  if (!activeYTPlayer) return unlockYT();
-  const state = activeYTPlayer.getPlayerState();
-  if (state === 1) activeYTPlayer.pauseVideo();
-  else activeYTPlayer.playVideo();
-}
-
-function playNext() { fetch(getStatusEndpoint() + '/command', {method: 'POST', body: JSON.stringify({command: 'next'})}); }
-function playPrev() { fetch(getStatusEndpoint() + '/command', {method: 'POST', body: JSON.stringify({command: 'prev'})}); }
-
-window.onYouTubeIframeAPIReady = function() {
-  ytPlayer1 = new YT.Player('player1', {
-    events: {
-      onReady: (e) => onYTReady(e, 'player1'),
-      onStateChange: onYTState
-    },
-    playerVars: { autoplay: 0, controls: 0, rel: 0 }
-  });
-  ytPlayer2 = new YT.Player('player2', {
-    events: {
-      onReady: (e) => onYTReady(e, 'player2'),
-      onStateChange: onYTState
-    },
-    playerVars: { autoplay: 0, controls: 0, rel: 0 }
-  });
-};
-
-// EVENTOS
-playPauseBtn.onclick = togglePlay;
-prevBtn.onclick = playPrev;
-nextBtn.onclick = playNext;
-connectBtn.onclick = async () => {
-  API_BASE = apiLinkInput.value;
-  localStorage.setItem('jamApiLink', API_BASE);
-  fetchStatus();
-};
-setInterval(fetchStatus, 1500);
-
-// START
-fetchStatus();
-console.log('JAM PLAYER ATIVO - servidor: ' + API_BASE);
-})();
