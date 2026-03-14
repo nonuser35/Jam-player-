@@ -10,7 +10,7 @@ let apiBaseUrl = localStorage.getItem('jam_api_url') || "";
 let player1, player2, activePlayer, nextPlayer;
 let lastVideoId = "";
 let syncInterval = null;
-const SYNC_MARGIN = 2; // Reduzido para maior precisão
+const SYNC_MARGIN = 2; // Margem estreita para sincronização precisa
 
 // --- CAPTURA AUTOMÁTICA DA URL ---
 const urlParams = new URLSearchParams(window.location.search);
@@ -30,7 +30,6 @@ function onYouTubeIframeAPIReady() {
             'controls': 0, 
             'disablekb': 1, 
             'autoplay': 1, 
-            // IMPORTANTE: Usa location.origin para bater com o GitHub
             'origin': window.location.origin 
         } 
     };
@@ -70,26 +69,25 @@ async function fetchSync() {
         gerenciarAudio(data);
         atualizarFila(data.queue);
         atualizarOuvintes(data.usuarios);
-        
-        if (data.track_name && typeof syncLyrics === "function") {
-            syncLyrics(data.track_name, data.artist_name);
-        }
     } catch (err) {
-        console.warn("Buscando servidor...");
+        console.warn("Servidor offline ou Ngrok bloqueado.");
         const statusMsg = document.getElementById('connectionMessage');
         if (statusMsg) statusMsg.innerText = "Reconectando...";
     }
 }
 
-// --- 3. LÓGICA DE ÁUDIO ---
+// --- 3. LÓGICA DE ÁUDIO (Double Buffering) ---
 function gerenciarAudio(data) {
     if (!data.video_id || !activePlayer || !activePlayer.loadVideoById) return;
 
+    // Se a música mudou no Spotify/Python
     if (data.video_id !== lastVideoId) {
         lastVideoId = data.video_id;
         console.log("> Trocando para vídeo:", data.video_id);
         
+        // Carrega no player que está em espera (mudo)
         nextPlayer.loadVideoById(data.video_id, data.progress || 0);
+        nextPlayer.setVolume(activePlayer.getVolume() || 50);
         
         setTimeout(() => {
             activePlayer.stopVideo();
@@ -97,14 +95,11 @@ function gerenciarAudio(data) {
             activePlayer = nextPlayer;
             nextPlayer = temp;
             activePlayer.playVideo();
-            
-            // Controle de opacidade para os iframes (opcional)
-            document.getElementById('player1').style.opacity = (activePlayer === player1) ? '0' : '0';
-            document.getElementById('player2').style.opacity = (activePlayer === player2) ? '0' : '0';
-        }, 1000);
+        }, 1200);
         return;
     }
 
+    // Sincronia de tempo
     const meuTempo = activePlayer.getCurrentTime();
     const diff = Math.abs(data.progress - meuTempo);
 
@@ -112,12 +107,15 @@ function gerenciarAudio(data) {
         activePlayer.seekTo(data.progress, true);
     }
 
+    // Estado Play/Pause
     if (data.is_playing) {
-        activePlayer.playVideo();
+        if (activePlayer.getPlayerState() !== 1) activePlayer.playVideo();
         document.getElementById('playPauseBtn').classList.add('active');
+        document.getElementById('playPauseBtn').innerText = "⏸";
     } else {
-        activePlayer.pauseVideo();
+        if (activePlayer.getPlayerState() !== 2) activePlayer.pauseVideo();
         document.getElementById('playPauseBtn').classList.remove('active');
+        document.getElementById('playPauseBtn').innerText = "▶";
     }
 }
 
@@ -144,7 +142,7 @@ function atualizarFila(queue) {
     const list = document.getElementById('upcomingList');
     if (!list || !queue) return;
     list.innerHTML = queue.map(song => `
-        <div class="upcoming-item fade-in">
+        <div class="upcoming-item">
             <img src="${song.cover}" alt="Capa">
             <div class="song-info"><strong>${song.name}</strong><small>${song.artist}</small></div>
         </div>
@@ -154,7 +152,6 @@ function atualizarFila(queue) {
 function atualizarOuvintes(usuarios) {
     const container = document.getElementById('listenersPile');
     if (!container || !usuarios) return;
-    // Garante que o map não quebre se usuários for vazio
     container.innerHTML = (usuarios || []).map(u => `
         <div class="user-item" title="${u.name}">
             <img src="${u.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png'}">
@@ -162,7 +159,7 @@ function atualizarOuvintes(usuarios) {
     `).join('');
 }
 
-// --- 5. COMANDOS ---
+// --- 5. COMANDOS E LISTENERS ---
 async function enviarComando(cmd, val = null) {
     if (!apiBaseUrl) return;
     try {
@@ -174,19 +171,37 @@ async function enviarComando(cmd, val = null) {
     } catch (e) { console.error("Erro ao enviar comando:", cmd); }
 }
 
-// --- LISTENERS ---
+// Abrir painel de configurações
+document.getElementById('settingsBtn').addEventListener('click', () => {
+    document.getElementById('settingsPanel').classList.toggle('hidden');
+});
+
+// Botão Conectar (Ativa áudio também)
 document.getElementById('connectBtn').addEventListener('click', () => {
     const val = document.getElementById('apiLinkInput').value;
     apiBaseUrl = val.trim().replace(/\/$/, ""); 
     localStorage.setItem('jam_api_url', apiBaseUrl);
+    
+    // "Acorda" os players com um play/pause rápido para permitir áudio
+    activePlayer.playVideo();
+    setTimeout(() => { if(!lastVideoId) activePlayer.pauseVideo(); }, 100);
+    
     iniciarSincronizacao();
 });
 
+// Controles de Música
 document.getElementById('nextBtn').addEventListener('click', () => enviarComando('next'));
 document.getElementById('prevBtn').addEventListener('click', () => enviarComando('prev'));
 document.getElementById('playPauseBtn').addEventListener('click', function() {
     const isPlaying = this.classList.contains('active');
     enviarComando(isPlaying ? 'pause' : 'play');
+});
+
+// Slider de Volume
+document.getElementById('volumeSlider').addEventListener('input', (e) => {
+    const vol = e.target.value * 100;
+    if(player1) player1.setVolume(vol);
+    if(player2) player2.setVolume(vol);
 });
 
 function formatTime(s) {
