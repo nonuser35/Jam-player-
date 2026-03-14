@@ -1,34 +1,20 @@
-const CACHE_NAME = 'music-player-v1';
-const ASSETS = ['/', '/index.html', '/style.css', '/script.js'];
+// sw.js - Arquivo de Cache (Service Worker)
+const CACHE_NAME = 'jam-player-v1';
+const assets = [
+  './',
+  './index.html',
+  './style.css',
+  './script.js'
+];
 
-self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(ASSETS))
-      .then(() => self.skipWaiting())
+self.addEventListener('install', e => {
+  e.waitUntil(
+    caches.open(CACHE_NAME).then(cache => cache.addAll(assets))
   );
 });
 
-self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys().then(keys => Promise.all(
-      keys.map(key => { if (key !== CACHE_NAME) return caches.delete(key); })
-    ))
-  );
-  self.clients.claim();
-});
-
-self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET') return;
-  event.respondWith(
-    caches.match(event.request).then(cached => {
-      if (cached) return cached;
-      return fetch(event.request).then(response => {
-        if (!response || !response.ok) return response;
-        const cloned = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(event.request, cloned));
-        return response;
-      });
-    }).catch(() => caches.match('/index.html'))
+self.addEventListener('fetch', e => {
+  e.respondWith(
+    caches.match(e.request).then(res => res || fetch(e.request))
   );
 });
